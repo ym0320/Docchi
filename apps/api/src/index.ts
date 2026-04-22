@@ -150,6 +150,8 @@ async function verifyTurnstile(token: string, env: Env): Promise<boolean> {
 }
 
 function getSessionId(request: Request, cookieName: string): string | null {
+  const header = request.headers.get("X-Session-ID");
+  if (header) return header;
   const cookie = request.headers.get("Cookie");
   if (!cookie) return null;
   const pair = cookie.split(";").map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`));
@@ -176,7 +178,7 @@ function json(data: unknown, status = 200): Response {
 }
 function withCors(response: Response): Response {
   response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, X-Session-ID");
   response.headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   return response;
 }

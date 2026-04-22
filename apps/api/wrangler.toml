@@ -5,14 +5,14 @@ compatibility_date = "2026-04-21"
 [[d1_databases]]
 binding = "DB"
 database_name = "docchi"
-database_id = "replace-with-real-id"
+database_id = "2a2bde1a-ea8f-4ac8-ba00-5249d62bd059"
 
 [vars]
 COOKIE_NAME = "docchi_session"
 TURNSTILE_SECRET = "replace-me"
 DATA_TTL_DAYS = "30"
 BYPASS_TURNSTILE = "true"
-SESSION_HASH_SALT = "replace-with-random-secret"
+SESSION_HASH_SALT = "165208ba626afed2b4c6b24b8e6711ae9205928e25a2f436b91cddcfa0e07d4a"
 
 [triggers]
 crons = ["0 * * * *"]

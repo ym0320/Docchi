@@ -1,6 +1,8 @@
-﻿import type { Poll, PollResult, VoteOption } from "./types";
+import type { Poll, PollResult, VoteOption } from "./types";
 
-const DEFAULT_API_BASE = "http://127.0.0.1:8787/api/v1";
+const DEFAULT_API_BASE = "https://docchi-api.yuunakanaka-miruku.workers.dev/api/v1";
+
+let sessionId: string | null = null;
 
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, "");
@@ -9,44 +11,54 @@ function normalizeBaseUrl(baseUrl: string): string {
   return `${trimmed}/api/v1`;
 }
 
+function sessionHeaders(): Record<string, string> {
+  return sessionId ? { "X-Session-ID": sessionId } : {};
+}
+
 export function createApi(baseUrl: string) {
   const API_BASE = normalizeBaseUrl(baseUrl || DEFAULT_API_BASE);
 
   return {
     initSession: async () => {
-      const response = await fetch(`${API_BASE}/sessions/init`, { method: "POST", credentials: "include" });
+      if (sessionId) return;
+      const response = await fetch(`${API_BASE}/sessions/init`, { method: "POST" });
       if (!response.ok) throw new Error("セッション初期化に失敗しました");
+      const data = await response.json() as { session_id: string };
+      sessionId = data.session_id;
     },
     fetchNextPoll: async (): Promise<Poll | null> => {
-      const response = await fetch(`${API_BASE}/polls/next`, { method: "GET", credentials: "include" });
+      const response = await fetch(`${API_BASE}/polls/next`, {
+        method: "GET",
+        headers: sessionHeaders(),
+      });
       if (response.status === 204) return null;
       if (!response.ok) throw new Error("投票の取得に失敗しました");
-      const data = await response.json();
-      return data.poll as Poll;
+      const data = await response.json() as { poll: Poll };
+      return data.poll;
     },
     votePoll: async (pollId: string, selected: VoteOption): Promise<PollResult> => {
       const response = await fetch(`${API_BASE}/polls/${pollId}/vote`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...sessionHeaders() },
         body: JSON.stringify({ selected_option: selected }),
       });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
+        const error = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(error.error ?? "投票に失敗しました");
       }
-      const data = await response.json();
-      return data.result as PollResult;
+      const data = await response.json() as { result: PollResult };
+      return data.result;
     },
     createPoll: async (payload: {
       title: string; option_a: string; option_b: string; close_in_minutes: number; turnstile_token: string;
     }) => {
       const response = await fetch(`${API_BASE}/polls`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...sessionHeaders() },
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
+        const error = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(error.error ?? "投稿に失敗しました");
       }
       return response.json();
