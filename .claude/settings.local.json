@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sys,json; [print\\(b['name']\\) for b in json.load\\(sys.stdin\\)]\")",
+      "Bash(python -c \"import sys,json; [print\\(r['ref']\\) for r in json.load\\(sys.stdin\\)]\")",
+      "Bash(python -c \"import sys,json; [print\\(r['name'], '-', r['updated_at'][:10], '\\(', r['visibility'], '\\)'\\) for r in json.load\\(sys.stdin\\)]\")",
+      "Bash(python -c \"import sys,json; commits=json.load\\(sys.stdin\\); [print\\(c['sha'][:7], c['commit']['message'][:60], '-', c['commit']['author']['date'][:10]\\) for c in commits]\")"
+    ]
+  }
+}

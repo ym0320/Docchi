@@ -1,0 +1,11 @@
+﻿{
+  "expo": {
+    "name": "Docchi",
+    "slug": "docchi",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": { "supportsTablet": true },
+    "web": { "bundler": "metro" }
+  }
+}
