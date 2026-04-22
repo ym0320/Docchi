@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { createApi, myPollIds, myPolls } from "./src/api";
-import type { MyPoll } from "./src/api";
+import type { MyPoll, MyPollWithStats } from "./src/api";
 import type { Poll, PollResult } from "./src/types";
 
 const api = createApi("");
@@ -26,12 +26,12 @@ const SWIPE_THRESHOLD = SW * 0.27;
 // ─── Root ────────────────────────────────────────────────
 
 export default function App() {
-  const [screen, setScreen] = useState<"vote" | "create">("vote");
+  const [screen, setScreen] = useState<"vote" | "create" | "history">("vote");
   return (
     <SafeAreaView style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor="#0D0D10" />
       <View style={s.body}>
-        {screen === "vote" ? <VoteScreen /> : <CreateScreen />}
+        {screen === "vote" ? <VoteScreen /> : screen === "create" ? <CreateScreen /> : <HistoryScreen />}
       </View>
       <View style={s.tabBar}>
         <Pressable style={s.tabItem} onPress={() => setScreen("vote")}>
@@ -41,6 +41,10 @@ export default function App() {
         <Pressable style={s.tabItem} onPress={() => setScreen("create")}>
           <Text style={[s.tabIcon, screen === "create" && s.tabIconActive]}>＋</Text>
           <Text style={[s.tabLabel, screen === "create" && s.tabLabelActive]}>投稿</Text>
+        </Pressable>
+        <Pressable style={s.tabItem} onPress={() => setScreen("history")}>
+          <Text style={[s.tabIcon, screen === "history" && s.tabIconActive]}>履</Text>
+          <Text style={[s.tabLabel, screen === "history" && s.tabLabelActive]}>履歴</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -455,6 +459,160 @@ function MiniBar({ label, percent, anim, color }: {
         <Animated.View style={[s.miniBarFill, { width: barWidth, backgroundColor: color }]} />
       </View>
       <Text style={s.miniBarPercent}>{percent}%</Text>
+    </View>
+  );
+}
+
+// ─── History Screen ──────────────────────────────────────
+
+function HistoryScreen() {
+  const [polls, setPolls] = useState<MyPollWithStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await api.initSession();
+      const data = await api.fetchMyPolls();
+      setPolls(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "取得に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleClose = (poll: MyPollWithStats) => {
+    Alert.alert("今すぐ締め切る", `「${poll.title}」を締め切りますか？`, [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "締め切る", style: "destructive",
+        onPress: async () => {
+          setClosingId(poll.id);
+          try {
+            await api.closePoll(poll.id);
+            setPolls((prev) =>
+              prev.map((p) => p.id === poll.id ? { ...p, closed: true, closes_at: new Date().toISOString() } : p)
+            );
+          } catch { /* already closed */ }
+          finally { setClosingId(null); }
+        },
+      },
+    ]);
+  };
+
+  return (
+    <View style={s.historyRoot}>
+      <View style={s.historyHeader}>
+        <Text style={s.historyTitle}>自分の投稿</Text>
+        <Pressable style={s.historyRefreshBtn} onPress={load} disabled={loading}>
+          <Text style={s.historyRefreshText}>{loading ? "更新中..." : "更新"}</Text>
+        </Pressable>
+      </View>
+
+      {error && (
+        <View style={s.errorBox}>
+          <Text style={s.errorText}>{error}</Text>
+        </View>
+      )}
+
+      <ScrollView style={s.historyScroll} contentContainerStyle={s.historyContent}>
+        {loading && polls.length === 0 ? (
+          <View style={s.historyCentered}>
+            <Text style={s.historyEmptyText}>読み込み中...</Text>
+          </View>
+        ) : polls.length === 0 ? (
+          <View style={s.historyCentered}>
+            <Text style={s.historyEmptyText}>まだ投稿がありません</Text>
+            <Text style={s.historyEmptyBody}>「投稿」タブから質問を作ってみよう</Text>
+          </View>
+        ) : (
+          polls.map((poll) => (
+            <HistoryCard
+              key={poll.id}
+              poll={poll}
+              closing={closingId === poll.id}
+              onClose={() => handleClose(poll)}
+            />
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function HistoryCard({
+  poll,
+  closing,
+  onClose,
+}: {
+  poll: MyPollWithStats;
+  closing: boolean;
+  onClose: () => void;
+}) {
+  const barA = useRef(new Animated.Value(0)).current;
+  const barB = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(barA, { toValue: poll.percent_a / 100, useNativeDriver: false, tension: 60 }),
+      Animated.spring(barB, { toValue: poll.percent_b / 100, useNativeDriver: false, tension: 60 }),
+    ]).start();
+  }, [poll.percent_a, poll.percent_b]);
+
+  const barAWidth = barA.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const barBWidth = barB.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+
+  return (
+    <View style={[s.historyCard, poll.closed && s.historyCardClosed]}>
+      <View style={s.historyCardHeader}>
+        <Text style={s.historyCardTitle} numberOfLines={2}>{poll.title}</Text>
+        {poll.closed
+          ? <View style={s.hClosedBadge}><Text style={s.hClosedBadgeText}>締切済み</Text></View>
+          : (
+            <Pressable
+              style={[s.hCloseBtn, closing && { opacity: 0.5 }]}
+              onPress={onClose}
+              disabled={closing}
+            >
+              <Text style={s.hCloseBtnText}>{closing ? "処理中..." : "締め切る"}</Text>
+            </Pressable>
+          )
+        }
+      </View>
+
+      {!poll.closed && (
+        <Text style={s.historyDeadline}>締切 {formatDeadline(poll.closes_at)}</Text>
+      )}
+
+      <Text style={s.historyTotalVotes}>合計 {poll.total_votes} 票</Text>
+
+      <View style={s.historyBarRow}>
+        <View style={[s.historyOptionBadge, { backgroundColor: "#2563EB" }]}>
+          <Text style={s.historyOptionBadgeText}>A</Text>
+        </View>
+        <Text style={s.historyOptionText} numberOfLines={1}>{poll.option_a}</Text>
+        <Text style={[s.historyPercent, { color: "#2563EB" }]}>{poll.percent_a}%</Text>
+      </View>
+      <View style={s.hBarTrack}>
+        <Animated.View style={[s.hBarFill, { width: barAWidth, backgroundColor: "#2563EB" }]} />
+      </View>
+
+      <View style={[s.historyBarRow, { marginTop: 10 }]}>
+        <View style={[s.historyOptionBadge, { backgroundColor: "#DC2626" }]}>
+          <Text style={s.historyOptionBadgeText}>B</Text>
+        </View>
+        <Text style={s.historyOptionText} numberOfLines={1}>{poll.option_b}</Text>
+        <Text style={[s.historyPercent, { color: "#DC2626" }]}>{poll.percent_b}%</Text>
+      </View>
+      <View style={s.hBarTrack}>
+        <Animated.View style={[s.hBarFill, { width: barBWidth, backgroundColor: "#DC2626" }]} />
+      </View>
     </View>
   );
 }
@@ -1083,6 +1241,78 @@ const s = StyleSheet.create({
     marginTop: 12,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  // History screen
+  historyRoot: { flex: 1, backgroundColor: "#0D0D10" },
+  historyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  historyTitle: { fontSize: 26, fontWeight: "900", color: "#FFFFFF", letterSpacing: -1 },
+  historyRefreshBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#1E1E24",
+  },
+  historyRefreshText: { fontSize: 13, fontWeight: "700", color: "#9CA3AF" },
+  historyScroll: { flex: 1 },
+  historyContent: { padding: 16, gap: 12, paddingBottom: 40 },
+  historyCentered: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 8 },
+  historyEmptyText: { fontSize: 18, fontWeight: "700", color: "#4B4B58" },
+  historyEmptyBody: { fontSize: 14, color: "#3A3A42", textAlign: "center" },
+  historyCard: {
+    backgroundColor: "#161620",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#1E1E2A",
+    gap: 6,
+  },
+  historyCardClosed: { opacity: 0.7 },
+  historyCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 4,
+  },
+  historyCardTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: "#F9FAFB", lineHeight: 22 },
+  hClosedBadge: {
+    backgroundColor: "#1E1E28",
+    borderRadius: 10,
+    paddingVertical: 3,
+    paddingHorizontal: 9,
+  },
+  hClosedBadgeText: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
+  hCloseBtn: {
+    backgroundColor: "rgba(185, 28, 28, 0.12)",
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(220, 38, 38, 0.3)",
+  },
+  hCloseBtnText: { fontSize: 12, fontWeight: "700", color: "#F87171" },
+  historyDeadline: { fontSize: 12, color: "#6B7280", marginBottom: 2 },
+  historyTotalVotes: { fontSize: 12, color: "#4B4B58", marginBottom: 6 },
+  historyBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  historyOptionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  historyOptionBadgeText: { fontSize: 11, fontWeight: "900", color: "#fff" },
+  historyOptionText: { flex: 1, fontSize: 14, fontWeight: "600", color: "#D1D5DB" },
+  historyPercent: { fontSize: 16, fontWeight: "900" },
+  hBarTrack: { height: 6, borderRadius: 3, backgroundColor: "#1E1E2A", overflow: "hidden" },
+  hBarFill: { height: 6, borderRadius: 3 },
+
   myPollsSection: { marginTop: 28, gap: 12 },
   myPollsSectionTitle: { fontSize: 16, fontWeight: "800", color: "#0F0F11" },
   myPollCard: {

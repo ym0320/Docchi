@@ -22,6 +22,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/v1/sessions/init") return withCors(await initSession(env));
       if (request.method === "POST" && url.pathname === "/api/v1/polls") return withCors(await createPoll(request, env));
       if (request.method === "GET" && url.pathname === "/api/v1/polls/next") return withCors(await getNextPoll(request, env));
+      if (request.method === "GET" && url.pathname === "/api/v1/polls/mine") return withCors(await getMyPolls(request, env));
 
       const voteMatch = url.pathname.match(/^\/api\/v1\/polls\/([^/]+)\/vote$/);
       if (request.method === "POST" && voteMatch) return withCors(await votePoll(request, env, voteMatch[1]));
@@ -97,7 +98,7 @@ async function getNextPoll(request: Request, env: Env): Promise<Response> {
   const sessionId = getSessionId(request, env.COOKIE_NAME);
   const now = new Date().toISOString();
   const query = sessionId
-    ? `SELECT p.id, p.title, p.option_a, p.option_b, p.closes_at FROM polls p WHERE p.closes_at > ?1 AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.poll_id=p.id AND v.session_hash=?2) ORDER BY RANDOM() LIMIT 1`
+    ? `SELECT p.id, p.title, p.option_a, p.option_b, p.closes_at FROM polls p WHERE p.closes_at > ?1 AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.poll_id=p.id AND v.session_hash=?2) AND (p.creator_session_hash IS NULL OR p.creator_session_hash != ?2) ORDER BY RANDOM() LIMIT 1`
     : `SELECT id, title, option_a, option_b, closes_at FROM polls WHERE closes_at > ?1 ORDER BY RANDOM() LIMIT 1`;
 
   const stmt = env.DB.prepare(query);
@@ -126,6 +127,29 @@ async function votePoll(request: Request, env: Env, pollId: string): Promise<Res
 
   const result = await aggregateResult(env, pollId);
   return json({ poll_id: pollId, selected_option: payload.selected_option, result });
+}
+
+async function getMyPolls(request: Request, env: Env): Promise<Response> {
+  const sessionId = getSessionId(request, env.COOKIE_NAME);
+  if (!sessionId) return json({ polls: [] });
+  const hash = await hashSession(sessionId, env);
+  const rows = await env.DB.prepare(
+    `SELECT id, title, option_a, option_b, closes_at,
+       (SELECT COUNT(*) FROM votes WHERE poll_id=polls.id) as total_votes,
+       (SELECT COUNT(*) FROM votes WHERE poll_id=polls.id AND selected_option='A') as votes_a,
+       (SELECT COUNT(*) FROM votes WHERE poll_id=polls.id AND selected_option='B') as votes_b
+     FROM polls WHERE creator_session_hash=?1 ORDER BY created_at DESC LIMIT 50`
+  ).bind(hash).all<{
+    id: string; title: string; option_a: string; option_b: string;
+    closes_at: string; total_votes: number; votes_a: number; votes_b: number;
+  }>();
+  const polls = (rows.results ?? []).map((p) => ({
+    ...p,
+    closed: new Date(p.closes_at).getTime() <= Date.now(),
+    percent_a: p.total_votes === 0 ? 0 : Number(((p.votes_a / p.total_votes) * 100).toFixed(1)),
+    percent_b: p.total_votes === 0 ? 0 : Number(((p.votes_b / p.total_votes) * 100).toFixed(1)),
+  }));
+  return json({ polls });
 }
 
 async function getPollResult(env: Env, pollId: string): Promise<Response> {

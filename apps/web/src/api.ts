@@ -12,6 +12,15 @@ export interface MyPoll {
   closes_at: string;
 }
 
+export interface MyPollWithStats extends MyPoll {
+  total_votes: number;
+  votes_a: number;
+  votes_b: number;
+  percent_a: number;
+  percent_b: number;
+  closed: boolean;
+}
+
 // 自分が作ったポール一覧（アプリ再起動まで保持）
 export const myPollIds = new Set<string>();
 export const myPolls = new Map<string, MyPoll>();
@@ -79,6 +88,15 @@ export function createApi(baseUrl: string) {
       if (response.status === 403) throw new Error("forbidden");
       if (response.status === 410) throw new Error("already_closed");
       if (!response.ok) throw new Error("締め切りに失敗しました");
+    },
+
+    fetchMyPolls: async (): Promise<MyPollWithStats[]> => {
+      const response = await fetch(`${API_BASE}/polls/mine`, {
+        headers: sessionHeaders(),
+      });
+      if (!response.ok) throw new Error("履歴の取得に失敗しました");
+      const data = await response.json() as { polls: MyPollWithStats[] };
+      return data.polls;
     },
 
     createPoll: async (payload: {
