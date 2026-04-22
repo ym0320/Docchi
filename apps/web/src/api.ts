@@ -42,6 +42,12 @@ export function createApi(baseUrl: string) {
         headers: { "Content-Type": "application/json", ...sessionHeaders() },
         body: JSON.stringify({ selected_option: selected }),
       });
+      if (response.status === 410) {
+        // 締切済み → 結果だけ取得
+        const result = await fetchPollResult(API_BASE, pollId);
+        throw Object.assign(new Error("締切済み"), { closed: true, result });
+      }
+      if (response.status === 409) throw new Error("already_voted");
       if (!response.ok) {
         const error = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(error.error ?? "投票に失敗しました");
@@ -49,6 +55,7 @@ export function createApi(baseUrl: string) {
       const data = await response.json() as { result: PollResult };
       return data.result;
     },
+    fetchPollResult: (pollId: string) => fetchPollResult(API_BASE, pollId),
     createPoll: async (payload: {
       title: string; option_a: string; option_b: string; close_in_minutes: number; turnstile_token: string;
     }) => {
@@ -64,6 +71,13 @@ export function createApi(baseUrl: string) {
       return response.json();
     },
   };
+}
+
+async function fetchPollResult(apiBase: string, pollId: string): Promise<PollResult> {
+  const response = await fetch(`${apiBase}/polls/${pollId}/result`);
+  if (!response.ok) throw new Error("結果の取得に失敗しました");
+  const data = await response.json() as { result: PollResult };
+  return data.result;
 }
 
 export { DEFAULT_API_BASE };

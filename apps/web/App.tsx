@@ -19,68 +19,61 @@ const api = createApi("");
 
 type Screen = "vote" | "create";
 
-const C = {
-  bg: "#0f0f13",
-  surface: "#1a1a22",
-  surfaceHigh: "#24242f",
-  border: "#2e2e3d",
-  textPrimary: "#f0f0f5",
-  textSecondary: "#8888aa",
-  a: "#5b8cff",
-  aLight: "#1a2a55",
-  b: "#ff6b5b",
-  bLight: "#451a16",
-  accent: "#7c5cfc",
-  success: "#34d399",
-};
-
 export default function App() {
   const [screen, setScreen] = useState<Screen>("vote");
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <View style={styles.header}>
-        <Text style={styles.logo}>Docchi</Text>
-        <Text style={styles.tagline}>どっちにする？</Text>
-      </View>
-
-      <View style={styles.body}>
+    <SafeAreaView style={s.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <View style={s.body}>
         {screen === "vote" ? <VoteScreen /> : <CreateScreen />}
       </View>
-
-      <View style={styles.tabBar}>
-        <Pressable style={styles.tabItem} onPress={() => setScreen("vote")}>
-          <View style={[styles.tabIndicator, screen === "vote" && styles.tabIndicatorActive]} />
-          <Text style={[styles.tabLabel, screen === "vote" && styles.tabLabelActive]}>投票</Text>
+      <View style={s.tabBar}>
+        <Pressable style={s.tabItem} onPress={() => setScreen("vote")}>
+          <Text style={[s.tabIcon, screen === "vote" && s.tabIconActive]}>票</Text>
+          <Text style={[s.tabLabel, screen === "vote" && s.tabLabelActive]}>投票</Text>
         </Pressable>
-        <Pressable style={styles.tabItem} onPress={() => setScreen("create")}>
-          <View style={[styles.tabIndicator, screen === "create" && styles.tabIndicatorActive]} />
-          <Text style={[styles.tabLabel, screen === "create" && styles.tabLabelActive]}>投稿</Text>
+        <Pressable style={s.tabItem} onPress={() => setScreen("create")}>
+          <Text style={[s.tabIcon, screen === "create" && s.tabIconActive]}>＋</Text>
+          <Text style={[s.tabLabel, screen === "create" && s.tabLabelActive]}>投稿</Text>
         </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
+// ─── Vote ───────────────────────────────────────────────
+
 function VoteScreen() {
   const [poll, setPoll] = useState<Poll | null>(null);
   const [result, setResult] = useState<PollResult | null>(null);
   const [chosen, setChosen] = useState<"A" | "B" | null>(null);
+  const [closed, setClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const barA = useRef(new Animated.Value(0)).current;
   const barB = useRef(new Animated.Value(0)).current;
 
-  const loadNext = async () => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(async () => {
+  const showResult = (res: PollResult, pick: "A" | "B" | null, isClosed = false) => {
+    setResult(res);
+    setChosen(pick);
+    setClosed(isClosed);
+    Animated.parallel([
+      Animated.spring(barA, { toValue: res.percent_a / 100, useNativeDriver: false, tension: 60 }),
+      Animated.spring(barB, { toValue: res.percent_b / 100, useNativeDriver: false, tension: 60 }),
+    ]).start();
+  };
+
+  const loadNext = () => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(async () => {
       setLoading(true);
       setError(null);
       setResult(null);
       setChosen(null);
+      setClosed(false);
       barA.setValue(0);
       barB.setValue(0);
       try {
@@ -90,7 +83,7 @@ function VoteScreen() {
         setError(e instanceof Error ? e.message : "読み込みに失敗しました");
       } finally {
         setLoading(false);
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
       }
     });
   };
@@ -100,17 +93,18 @@ function VoteScreen() {
   const vote = async (selected: "A" | "B") => {
     if (!poll || submitting) return;
     setSubmitting(true);
-    setChosen(selected);
     try {
       const res = await api.votePoll(poll.id, selected);
-      setResult(res);
-      Animated.parallel([
-        Animated.spring(barA, { toValue: res.percent_a / 100, useNativeDriver: false }),
-        Animated.spring(barB, { toValue: res.percent_b / 100, useNativeDriver: false }),
-      ]).start();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "投票に失敗しました");
-      setChosen(null);
+      showResult(res, selected);
+    } catch (e: any) {
+      if (e.closed && e.result) {
+        showResult(e.result, null, true);
+      } else if (e.message === "already_voted") {
+        const res = await api.fetchPollResult(poll.id);
+        showResult(res, null, false);
+      } else {
+        setError(e.message ?? "投票に失敗しました");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -118,160 +112,218 @@ function VoteScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.loadingText}>読み込み中...</Text>
+      <View style={s.centered}>
+        <Text style={s.loadingDot}>・・・</Text>
       </View>
     );
   }
 
   if (!poll) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyIcon}>🤔</Text>
-        <Text style={styles.emptyText}>投票がありません</Text>
-        <Text style={styles.emptyHint}>「投稿」タブから質問を追加しよう</Text>
-        <Pressable style={styles.reloadBtn} onPress={loadNext}>
-          <Text style={styles.reloadBtnText}>再読み込み</Text>
+      <View style={s.centered}>
+        <Text style={s.emptyEmoji}>🤔</Text>
+        <Text style={s.emptyTitle}>質問がありません</Text>
+        <Text style={s.emptyBody}>「投稿」タブから最初の質問を作ろう</Text>
+        <Pressable style={s.reloadBtn} onPress={loadNext}>
+          <Text style={s.reloadBtnText}>再読み込み</Text>
         </Pressable>
       </View>
     );
   }
 
+  const isPollClosed = new Date(poll.closes_at).getTime() <= Date.now();
+
   return (
-    <Animated.View style={[styles.voteWrap, { opacity: fadeAnim }]}>
+    <Animated.ScrollView
+      style={[s.voteScroll, { opacity: fadeAnim }]}
+      contentContainerStyle={s.voteContent}
+      scrollEnabled={false}
+    >
+      {/* ヘッダー */}
+      <View style={s.voteHeader}>
+        <Text style={s.appName}>Docchi</Text>
+        {(isPollClosed || closed) && (
+          <View style={s.closedBadge}><Text style={s.closedBadgeText}>締切済み</Text></View>
+        )}
+      </View>
+
       {error && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={s.errorBox}>
+          <Text style={s.errorBoxText}>{error}</Text>
         </View>
       )}
 
-      <View style={styles.card}>
-        <Text style={styles.questionLabel}>Q.</Text>
-        <Text style={styles.questionText}>{poll.title}</Text>
-        <Text style={styles.deadline}>
-          締切 {new Date(poll.closes_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+      {/* 質問カード */}
+      <View style={s.questionCard}>
+        <Text style={s.questionTitle}>{poll.title}</Text>
+        <Text style={s.questionDeadline}>
+          {isPollClosed ? "締切済み" : `締切 ${formatDeadline(poll.closes_at)}`}
         </Text>
       </View>
 
+      {/* 投票ボタン or 結果 */}
       {!result ? (
-        <View style={styles.choiceRow}>
-          <Pressable
-            style={[styles.choiceBtn, styles.choiceBtnA, submitting && styles.btnDisabled]}
-            disabled={submitting}
+        <View style={s.choicesWrap}>
+          <ChoiceButton
+            label="A"
+            text={poll.option_a}
+            color="#2563EB"
+            bgColor="#EFF6FF"
+            disabled={submitting || isPollClosed}
             onPress={() => vote("A")}
-          >
-            <Text style={styles.choiceLetter}>A</Text>
-            <Text style={styles.choiceText}>{poll.option_a}</Text>
-          </Pressable>
-
-          <View style={styles.orDivider}>
-            <Text style={styles.orText}>or</Text>
+          />
+          <View style={s.vsDivider}>
+            <View style={s.vsLine} />
+            <Text style={s.vsText}>or</Text>
+            <View style={s.vsLine} />
           </View>
-
-          <Pressable
-            style={[styles.choiceBtn, styles.choiceBtnB, submitting && styles.btnDisabled]}
-            disabled={submitting}
+          <ChoiceButton
+            label="B"
+            text={poll.option_b}
+            color="#DC2626"
+            bgColor="#FEF2F2"
+            disabled={submitting || isPollClosed}
             onPress={() => vote("B")}
-          >
-            <Text style={styles.choiceLetter}>B</Text>
-            <Text style={styles.choiceText}>{poll.option_b}</Text>
-          </Pressable>
+          />
+          {isPollClosed && (
+            <Text style={s.closedNote}>この質問は締め切りを過ぎています</Text>
+          )}
         </View>
       ) : (
-        <View style={styles.resultWrap}>
+        <View style={s.resultWrap}>
+          {closed && !chosen && (
+            <Text style={s.closedNote}>締め切り後のため投票できません</Text>
+          )}
           <ResultBar
             label="A"
-            optionText={poll.option_a}
+            text={poll.option_a}
             votes={result.votes_a}
             percent={result.percent_a}
             anim={barA}
-            color={C.a}
-            bgColor={C.aLight}
+            color="#2563EB"
             chosen={chosen === "A"}
           />
           <ResultBar
             label="B"
-            optionText={poll.option_b}
+            text={poll.option_b}
             votes={result.votes_b}
             percent={result.percent_b}
             anim={barB}
-            color={C.b}
-            bgColor={C.bLight}
+            color="#DC2626"
             chosen={chosen === "B"}
           />
-          <Text style={styles.totalText}>合計 {result.total_votes} 票</Text>
-          <Pressable style={styles.nextBtn} onPress={loadNext}>
-            <Text style={styles.nextBtnText}>次へ →</Text>
+          <Text style={s.totalVotes}>合計 {result.total_votes} 票</Text>
+          <Pressable style={s.nextBtn} onPress={loadNext}>
+            <Text style={s.nextBtnText}>次の質問へ</Text>
           </Pressable>
         </View>
       )}
 
       {!result && (
-        <Pressable style={styles.skipBtn} onPress={loadNext}>
-          <Text style={styles.skipText}>スキップ</Text>
+        <Pressable style={s.skipLink} onPress={loadNext}>
+          <Text style={s.skipLinkText}>スキップ</Text>
         </Pressable>
       )}
-    </Animated.View>
+    </Animated.ScrollView>
+  );
+}
+
+function ChoiceButton({
+  label, text, color, bgColor, disabled, onPress,
+}: {
+  label: string; text: string; color: string; bgColor: string;
+  disabled: boolean; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        s.choiceBtn,
+        { backgroundColor: bgColor, borderColor: color },
+        pressed && !disabled && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+        disabled && s.choiceBtnDisabled,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <View style={[s.choiceLabelBadge, { backgroundColor: color }]}>
+        <Text style={s.choiceLabelText}>{label}</Text>
+      </View>
+      <Text style={[s.choiceText, { color: disabled ? "#999" : "#1C1C1E" }]}>{text}</Text>
+    </Pressable>
   );
 }
 
 function ResultBar({
-  label, optionText, votes, percent, anim, color, bgColor, chosen,
+  label, text, votes, percent, anim, color, chosen,
 }: {
-  label: string; optionText: string; votes: number; percent: number;
-  anim: Animated.Value; color: string; bgColor: string; chosen: boolean;
+  label: string; text: string; votes: number; percent: number;
+  anim: Animated.Value; color: string; chosen: boolean;
 }) {
-  const width = anim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const barWidth = anim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
 
   return (
-    <View style={[styles.resultRow, chosen && { borderColor: color, borderWidth: 1.5 }]}>
-      <View style={styles.resultLabelRow}>
-        <Text style={[styles.resultLetter, { color }]}>{label}</Text>
-        <Text style={styles.resultOptionText}>{optionText}</Text>
-        {chosen && <Text style={[styles.votedBadge, { backgroundColor: color }]}>あなた</Text>}
-        <Text style={[styles.resultPercent, { color }]}>{percent}%</Text>
+    <View style={[s.resultRow, chosen && { borderColor: color }]}>
+      <View style={s.resultTopRow}>
+        <View style={[s.resultLabelBadge, { backgroundColor: color }]}>
+          <Text style={s.resultLabelText}>{label}</Text>
+        </View>
+        <Text style={s.resultOptionText} numberOfLines={1}>{text}</Text>
+        {chosen && (
+          <View style={[s.yourBadge, { borderColor: color }]}>
+            <Text style={[s.yourBadgeText, { color }]}>あなた</Text>
+          </View>
+        )}
+        <Text style={[s.resultPercent, { color }]}>{percent}%</Text>
       </View>
-      <View style={[styles.barBg, { backgroundColor: bgColor }]}>
-        <Animated.View style={[styles.barFill, { width, backgroundColor: color }]} />
+      <View style={s.barTrack}>
+        <Animated.View style={[s.barFill, { width: barWidth, backgroundColor: color }]} />
       </View>
-      <Text style={styles.voteCount}>{votes} 票</Text>
+      <Text style={s.resultVoteCount}>{votes}票</Text>
     </View>
   );
 }
+
+// ─── Create ─────────────────────────────────────────────
+
+const DEADLINE_PRESETS = [
+  { label: "30分", value: 30 },
+  { label: "1時間", value: 60 },
+  { label: "半日", value: 720 },
+  { label: "1日", value: 1440 },
+  { label: "3日", value: 4320 },
+];
 
 function CreateScreen() {
   const [title, setTitle] = useState("");
   const [optionA, setOptionA] = useState("");
   const [optionB, setOptionB] = useState("");
-  const [minutes, setMinutes] = useState("60");
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [minutes, setMinutes] = useState(60);
+  const [customInput, setCustomInput] = useState("");
+  const [useCustom, setUseCustom] = useState(false);
+  const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const PRESETS = [
-    { label: "1時間", value: "60" },
-    { label: "半日", value: "720" },
-    { label: "1日", value: "1440" },
-    { label: "3日", value: "4320" },
-  ];
+  const effectiveMinutes = useCustom ? Number(customInput) : minutes;
 
   const submit = async () => {
     const t = title.trim(), a = optionA.trim(), b = optionB.trim();
-    const mins = Number(minutes);
+    const mins = effectiveMinutes;
 
-    if (t.length < 1 || t.length > 60) return setMessage({ text: "タイトルは1〜60文字", ok: false });
-    if (a.length < 1 || a.length > 30) return setMessage({ text: "選択肢Aは1〜30文字", ok: false });
-    if (b.length < 1 || b.length > 30) return setMessage({ text: "選択肢Bは1〜30文字", ok: false });
-    if (!Number.isInteger(mins) || mins < 1 || mins > 4320) return setMessage({ text: "締切は1〜4320分", ok: false });
+    if (t.length < 1 || t.length > 60) return setStatus({ msg: "タイトルは1〜60文字で入力してください", ok: false });
+    if (a.length < 1 || a.length > 30) return setStatus({ msg: "選択肢Aは1〜30文字で入力してください", ok: false });
+    if (b.length < 1 || b.length > 30) return setStatus({ msg: "選択肢Bは1〜30文字で入力してください", ok: false });
+    if (!Number.isInteger(mins) || mins < 1 || mins > 4320) return setStatus({ msg: "締切は1〜4320分で指定してください", ok: false });
 
     setSubmitting(true);
-    setMessage(null);
+    setStatus(null);
     try {
       await api.initSession();
       await api.createPoll({ title: t, option_a: a, option_b: b, close_in_minutes: mins, turnstile_token: "" });
-      setTitle(""); setOptionA(""); setOptionB(""); setMinutes("60");
-      setMessage({ text: "投稿しました！", ok: true });
+      setTitle(""); setOptionA(""); setOptionB("");
+      setMinutes(60); setCustomInput(""); setUseCustom(false);
+      setStatus({ msg: "投稿しました！みんなが投票してくれるよ", ok: true });
     } catch (e) {
-      setMessage({ text: e instanceof Error ? e.message : "投稿に失敗しました", ok: false });
+      setStatus({ msg: e instanceof Error ? e.message : "投稿に失敗しました", ok: false });
     } finally {
       setSubmitting(false);
     }
@@ -279,41 +331,42 @@ function CreateScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView style={styles.createScroll} contentContainerStyle={styles.createContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.createTitle}>新しい質問を投稿</Text>
+      <ScrollView style={s.createScroll} contentContainerStyle={s.createContent} keyboardShouldPersistTaps="handled">
+        <Text style={s.createPageTitle}>みんなに聞いてみよう</Text>
 
-        <Text style={styles.fieldLabel}>質問タイトル <Text style={styles.fieldLimit}>{title.length}/60</Text></Text>
+        {/* 質問 */}
+        <Text style={s.fieldLabel}>質問 <Text style={s.charCount}>{title.length}/60</Text></Text>
         <TextInput
-          style={styles.textField}
-          placeholder="例：猫派と犬派、どっちが好き？"
-          placeholderTextColor={C.textSecondary}
+          style={s.textArea}
+          placeholder="例: 猫と犬、どっちが好き？"
+          placeholderTextColor="#AEAEB2"
           value={title}
           onChangeText={setTitle}
           maxLength={60}
           multiline
+          numberOfLines={2}
         />
 
-        <View style={styles.optionRow}>
-          <View style={[styles.optionWrap, { flex: 1 }]}>
-            <Text style={[styles.fieldLabel, { color: C.a }]}>A <Text style={styles.fieldLimit}>{optionA.length}/30</Text></Text>
+        {/* 選択肢 */}
+        <View style={s.optionsRow}>
+          <View style={s.optionCol}>
+            <Text style={[s.fieldLabel, { color: "#2563EB" }]}>A <Text style={s.charCount}>{optionA.length}/30</Text></Text>
             <TextInput
-              style={[styles.textField, styles.optionField, { borderColor: C.a + "44" }]}
+              style={[s.optionInput, { borderColor: "#BFDBFE" }]}
               placeholder="選択肢A"
-              placeholderTextColor={C.textSecondary}
+              placeholderTextColor="#AEAEB2"
               value={optionA}
               onChangeText={setOptionA}
               maxLength={30}
             />
           </View>
-          <View style={styles.optionVs}>
-            <Text style={styles.vsText}>vs</Text>
-          </View>
-          <View style={[styles.optionWrap, { flex: 1 }]}>
-            <Text style={[styles.fieldLabel, { color: C.b }]}>B <Text style={styles.fieldLimit}>{optionB.length}/30</Text></Text>
+          <Text style={s.optionVs}>vs</Text>
+          <View style={s.optionCol}>
+            <Text style={[s.fieldLabel, { color: "#DC2626" }]}>B <Text style={s.charCount}>{optionB.length}/30</Text></Text>
             <TextInput
-              style={[styles.textField, styles.optionField, { borderColor: C.b + "44" }]}
+              style={[s.optionInput, { borderColor: "#FECACA" }]}
               placeholder="選択肢B"
-              placeholderTextColor={C.textSecondary}
+              placeholderTextColor="#AEAEB2"
               value={optionB}
               onChangeText={setOptionB}
               maxLength={30}
@@ -321,131 +374,209 @@ function CreateScreen() {
           </View>
         </View>
 
-        <Text style={styles.fieldLabel}>締切</Text>
-        <View style={styles.presetRow}>
-          {PRESETS.map(p => (
+        {/* 締切 */}
+        <Text style={s.fieldLabel}>締切</Text>
+        <View style={s.presetRow}>
+          {DEADLINE_PRESETS.map(p => (
             <Pressable
               key={p.value}
-              style={[styles.presetChip, minutes === p.value && styles.presetChipActive]}
-              onPress={() => setMinutes(p.value)}
+              style={[s.presetChip, !useCustom && minutes === p.value && s.presetChipActive]}
+              onPress={() => { setMinutes(p.value); setUseCustom(false); }}
             >
-              <Text style={[styles.presetText, minutes === p.value && styles.presetTextActive]}>{p.label}</Text>
+              <Text style={[s.presetChipText, !useCustom && minutes === p.value && s.presetChipTextActive]}>
+                {p.label}
+              </Text>
             </Pressable>
           ))}
+          <Pressable
+            style={[s.presetChip, useCustom && s.presetChipActive]}
+            onPress={() => setUseCustom(true)}
+          >
+            <Text style={[s.presetChipText, useCustom && s.presetChipTextActive]}>カスタム</Text>
+          </Pressable>
         </View>
-        <TextInput
-          style={styles.textField}
-          placeholder="または分単位で入力 (1〜4320)"
-          placeholderTextColor={C.textSecondary}
-          keyboardType="numeric"
-          value={minutes}
-          onChangeText={setMinutes}
-        />
+        {useCustom && (
+          <TextInput
+            style={s.customMinInput}
+            placeholder="分単位で入力（1〜4320）"
+            placeholderTextColor="#AEAEB2"
+            keyboardType="numeric"
+            value={customInput}
+            onChangeText={setCustomInput}
+          />
+        )}
 
-        {message && (
-          <View style={[styles.messageBanner, { backgroundColor: message.ok ? "#0d3d2a" : "#3d0d0d" }]}>
-            <Text style={[styles.messageText, { color: message.ok ? C.success : C.b }]}>{message.text}</Text>
+        {/* ステータス */}
+        {status && (
+          <View style={[s.statusBox, { backgroundColor: status.ok ? "#F0FDF4" : "#FEF2F2", borderColor: status.ok ? "#86EFAC" : "#FECACA" }]}>
+            <Text style={[s.statusText, { color: status.ok ? "#166534" : "#991B1B" }]}>{status.msg}</Text>
           </View>
         )}
 
-        <Pressable style={[styles.submitBtn, submitting && styles.btnDisabled]} disabled={submitting} onPress={submit}>
-          <Text style={styles.submitBtnText}>{submitting ? "投稿中..." : "投稿する"}</Text>
+        {/* 投稿ボタン */}
+        <Pressable
+          style={[s.submitBtn, submitting && { opacity: 0.6 }]}
+          onPress={submit}
+          disabled={submitting}
+        >
+          <Text style={s.submitBtnText}>{submitting ? "投稿中..." : "投稿する"}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  logo: { fontSize: 26, fontWeight: "800", color: C.textPrimary, letterSpacing: -0.5 },
-  tagline: { fontSize: 12, color: C.textSecondary, marginTop: 1 },
+// ─── Utils ───────────────────────────────────────────────
+
+function formatDeadline(closesAt: string): string {
+  const d = new Date(closesAt);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  if (diffMs <= 0) return "締切済み";
+  const diffH = Math.floor(diffMs / 3600000);
+  if (diffH < 1) return `あと${Math.floor(diffMs / 60000)}分`;
+  if (diffH < 24) return `あと${diffH}時間`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}まで`;
+}
+
+// ─── Styles ──────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#fff" },
   body: { flex: 1 },
 
-  tabBar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
-  tabItem: { flex: 1, alignItems: "center", paddingVertical: 10 },
-  tabIndicator: { width: 24, height: 3, borderRadius: 2, backgroundColor: "transparent", marginBottom: 4 },
-  tabIndicatorActive: { backgroundColor: C.accent },
-  tabLabel: { fontSize: 13, color: C.textSecondary },
-  tabLabelActive: { color: C.textPrimary, fontWeight: "700" },
-
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: C.textSecondary, fontSize: 15 },
-  emptyIcon: { fontSize: 48, marginBottom: 4 },
-  emptyText: { fontSize: 18, fontWeight: "700", color: C.textPrimary },
-  emptyHint: { fontSize: 13, color: C.textSecondary },
-  reloadBtn: { marginTop: 8, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.surfaceHigh, borderRadius: 20 },
-  reloadBtnText: { color: C.textPrimary, fontSize: 14, fontWeight: "600" },
-
-  voteWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 8, gap: 12 },
-  errorBanner: { backgroundColor: "#3d0d0d", borderRadius: 10, padding: 12 },
-  errorText: { color: C.b, fontSize: 13 },
-
-  card: { backgroundColor: C.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: C.border },
-  questionLabel: { fontSize: 11, fontWeight: "700", color: C.accent, letterSpacing: 1, marginBottom: 6 },
-  questionText: { fontSize: 22, fontWeight: "800", color: C.textPrimary, lineHeight: 30 },
-  deadline: { fontSize: 11, color: C.textSecondary, marginTop: 10 },
-
-  choiceRow: { flexDirection: "row", gap: 0, alignItems: "stretch", height: 180 },
-  choiceBtn: {
-    flex: 1, borderRadius: 16, alignItems: "center", justifyContent: "center",
-    padding: 16, gap: 8,
+  // Tab
+  tabBar: {
+    flexDirection: "row", borderTopWidth: 1, borderTopColor: "#E5E5EA",
+    backgroundColor: "#fff", paddingBottom: Platform.OS === "ios" ? 0 : 4,
   },
-  choiceBtnA: { backgroundColor: C.aLight, borderWidth: 1.5, borderColor: C.a, marginRight: 6 },
-  choiceBtnB: { backgroundColor: C.bLight, borderWidth: 1.5, borderColor: C.b, marginLeft: 6 },
-  btnDisabled: { opacity: 0.5 },
-  choiceLetter: { fontSize: 32, fontWeight: "900", color: C.textPrimary },
-  choiceText: { fontSize: 15, fontWeight: "700", color: C.textPrimary, textAlign: "center" },
-  orDivider: { width: 28, alignItems: "center", justifyContent: "center" },
-  orText: { fontSize: 12, fontWeight: "600", color: C.textSecondary },
+  tabItem: { flex: 1, alignItems: "center", paddingVertical: 8, gap: 2 },
+  tabIcon: { fontSize: 18, color: "#AEAEB2" },
+  tabIconActive: { color: "#1C1C1E" },
+  tabLabel: { fontSize: 11, color: "#AEAEB2" },
+  tabLabelActive: { color: "#1C1C1E", fontWeight: "700" },
 
+  // Loading / Empty
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 32 },
+  loadingDot: { fontSize: 28, color: "#AEAEB2", letterSpacing: 4 },
+  emptyEmoji: { fontSize: 56 },
+  emptyTitle: { fontSize: 20, fontWeight: "700", color: "#1C1C1E" },
+  emptyBody: { fontSize: 14, color: "#8E8E93", textAlign: "center", lineHeight: 20 },
+  reloadBtn: {
+    marginTop: 8, paddingVertical: 12, paddingHorizontal: 28,
+    borderRadius: 24, borderWidth: 1.5, borderColor: "#E5E5EA",
+  },
+  reloadBtnText: { fontSize: 14, fontWeight: "600", color: "#1C1C1E" },
+
+  // Vote screen
+  voteScroll: { flex: 1, backgroundColor: "#F9F9F9" },
+  voteContent: { padding: 16, gap: 12, paddingBottom: 32 },
+  voteHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
+  appName: { fontSize: 22, fontWeight: "900", color: "#1C1C1E", letterSpacing: -0.5 },
+  closedBadge: { backgroundColor: "#F3F4F6", borderRadius: 12, paddingVertical: 4, paddingHorizontal: 10 },
+  closedBadgeText: { fontSize: 12, fontWeight: "600", color: "#6B7280" },
+
+  errorBox: { backgroundColor: "#FEF2F2", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#FECACA" },
+  errorBoxText: { fontSize: 13, color: "#991B1B" },
+
+  questionCard: {
+    backgroundColor: "#fff", borderRadius: 16, padding: 20,
+    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  questionTitle: { fontSize: 22, fontWeight: "800", color: "#1C1C1E", lineHeight: 30 },
+  questionDeadline: { marginTop: 10, fontSize: 12, color: "#8E8E93" },
+
+  choicesWrap: { gap: 0 },
+  choiceBtn: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    borderRadius: 14, borderWidth: 2, padding: 18,
+    backgroundColor: "#fff",
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  choiceBtnDisabled: { opacity: 0.45 },
+  choiceLabelBadge: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  choiceLabelText: { fontSize: 15, fontWeight: "900", color: "#fff" },
+  choiceText: { flex: 1, fontSize: 17, fontWeight: "700", color: "#1C1C1E" },
+
+  vsDivider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 10, paddingHorizontal: 4 },
+  vsLine: { flex: 1, height: 1, backgroundColor: "#E5E5EA" },
+  vsText: { fontSize: 12, fontWeight: "700", color: "#AEAEB2" },
+
+  closedNote: { marginTop: 10, fontSize: 13, color: "#8E8E93", textAlign: "center" },
+
+  // Result
   resultWrap: { gap: 10 },
   resultRow: {
-    backgroundColor: C.surface, borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: C.border, gap: 8,
+    backgroundColor: "#fff", borderRadius: 14, padding: 14,
+    borderWidth: 1.5, borderColor: "#E5E5EA", gap: 8,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  resultLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  resultLetter: { fontSize: 16, fontWeight: "900", width: 20 },
-  resultOptionText: { flex: 1, fontSize: 14, fontWeight: "600", color: C.textPrimary },
-  votedBadge: { fontSize: 10, fontWeight: "700", color: "#fff", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  resultPercent: { fontSize: 18, fontWeight: "800" },
-  barBg: { height: 8, borderRadius: 4, overflow: "hidden" },
+  resultTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  resultLabelBadge: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  resultLabelText: { fontSize: 12, fontWeight: "900", color: "#fff" },
+  resultOptionText: { flex: 1, fontSize: 15, fontWeight: "700", color: "#1C1C1E" },
+  yourBadge: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 2, paddingHorizontal: 7 },
+  yourBadgeText: { fontSize: 11, fontWeight: "700" },
+  resultPercent: { fontSize: 20, fontWeight: "900" },
+  barTrack: { height: 8, borderRadius: 4, backgroundColor: "#F3F4F6", overflow: "hidden" },
   barFill: { height: 8, borderRadius: 4 },
-  voteCount: { fontSize: 11, color: C.textSecondary },
-  totalText: { fontSize: 12, color: C.textSecondary, textAlign: "center" },
+  resultVoteCount: { fontSize: 12, color: "#8E8E93" },
+  totalVotes: { fontSize: 13, color: "#8E8E93", textAlign: "center" },
+
   nextBtn: {
-    backgroundColor: C.accent, borderRadius: 14, paddingVertical: 14,
+    backgroundColor: "#1C1C1E", borderRadius: 14, paddingVertical: 16,
     alignItems: "center", marginTop: 4,
   },
   nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  skipBtn: { alignSelf: "center", paddingVertical: 8, paddingHorizontal: 20 },
-  skipText: { color: C.textSecondary, fontSize: 13 },
 
-  createScroll: { flex: 1 },
-  createContent: { padding: 20, gap: 6, paddingBottom: 40 },
-  createTitle: { fontSize: 20, fontWeight: "800", color: C.textPrimary, marginBottom: 12 },
-  fieldLabel: { fontSize: 12, fontWeight: "700", color: C.textSecondary, letterSpacing: 0.5, marginBottom: 4 },
-  fieldLimit: { fontWeight: "400" },
-  textField: {
-    backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    color: C.textPrimary, fontSize: 15, padding: 14, marginBottom: 12,
+  skipLink: { alignSelf: "center", padding: 12 },
+  skipLinkText: { fontSize: 14, color: "#AEAEB2" },
+
+  // Create screen
+  createScroll: { flex: 1, backgroundColor: "#fff" },
+  createContent: { padding: 20, gap: 4, paddingBottom: 48 },
+  createPageTitle: { fontSize: 24, fontWeight: "900", color: "#1C1C1E", marginBottom: 20, letterSpacing: -0.5 },
+
+  fieldLabel: { fontSize: 13, fontWeight: "700", color: "#3C3C43", marginBottom: 6 },
+  charCount: { fontWeight: "400", color: "#AEAEB2" },
+
+  textArea: {
+    borderWidth: 1.5, borderColor: "#E5E5EA", borderRadius: 12,
+    padding: 14, fontSize: 16, color: "#1C1C1E",
+    minHeight: 70, textAlignVertical: "top", marginBottom: 16,
   },
-  optionRow: { flexDirection: "row", alignItems: "flex-end", gap: 0, marginBottom: 0 },
-  optionWrap: { gap: 0 },
-  optionField: { marginBottom: 12 },
-  optionVs: { width: 36, alignItems: "center", paddingBottom: 24 },
-  vsText: { fontSize: 12, fontWeight: "700", color: C.textSecondary },
-  presetRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  presetChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
-  presetChipActive: { backgroundColor: C.accent + "33", borderColor: C.accent },
-  presetText: { fontSize: 13, color: C.textSecondary, fontWeight: "600" },
-  presetTextActive: { color: C.accent },
-  messageBanner: { borderRadius: 10, padding: 12, marginTop: 4 },
-  messageText: { fontSize: 14, fontWeight: "600" },
+
+  optionsRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 16 },
+  optionCol: { flex: 1 },
+  optionVs: { fontSize: 12, fontWeight: "700", color: "#AEAEB2", paddingBottom: 14 },
+  optionInput: {
+    borderWidth: 1.5, borderRadius: 12, padding: 12,
+    fontSize: 15, color: "#1C1C1E",
+  },
+
+  presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  presetChip: {
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20,
+    borderWidth: 1.5, borderColor: "#E5E5EA", backgroundColor: "#fff",
+  },
+  presetChipActive: { borderColor: "#1C1C1E", backgroundColor: "#1C1C1E" },
+  presetChipText: { fontSize: 13, fontWeight: "600", color: "#3C3C43" },
+  presetChipTextActive: { color: "#fff" },
+
+  customMinInput: {
+    borderWidth: 1.5, borderColor: "#E5E5EA", borderRadius: 12,
+    padding: 12, fontSize: 15, color: "#1C1C1E", marginBottom: 12,
+  },
+
+  statusBox: { borderRadius: 12, padding: 14, borderWidth: 1, marginBottom: 4 },
+  statusText: { fontSize: 14, fontWeight: "600", lineHeight: 20 },
+
   submitBtn: {
-    backgroundColor: C.accent, borderRadius: 14, paddingVertical: 16,
-    alignItems: "center", marginTop: 8,
+    backgroundColor: "#1C1C1E", borderRadius: 14, paddingVertical: 17,
+    alignItems: "center", marginTop: 12,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });
