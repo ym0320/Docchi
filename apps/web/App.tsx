@@ -375,31 +375,31 @@ function SwipeCard({
         </Animated.View>
 
         {/* Card content */}
-        <View style={s.cardBody}>
+        <View style={s.cardTop}>
           <Text style={s.cardQuestion}>{poll.title}</Text>
           <Text style={s.cardDeadline}>
             {isPollClosed ? "締切済み" : formatDeadline(poll.closes_at)}
           </Text>
         </View>
 
-        {/* Bottom swipe guide */}
-        <View style={s.cardFooter}>
-          <View style={s.footerSide}>
-            <Text style={s.footerArrowB}>←</Text>
-            <View style={[s.footerBadge, { backgroundColor: "#DC2626" }]}>
-              <Text style={s.footerBadgeText}>B</Text>
+        {/* Large choice panels */}
+        <View style={s.choicePanels}>
+          <View style={s.choicePanelB}>
+            <Text style={s.choicePanelArrow}>←</Text>
+            <View style={[s.choicePanelBadge, { backgroundColor: "#DC2626" }]}>
+              <Text style={s.choicePanelBadgeText}>B</Text>
             </View>
-            <Text style={s.footerOptionB} numberOfLines={1}>{poll.option_b}</Text>
+            <Text style={s.choicePanelText}>{poll.option_b}</Text>
           </View>
 
-          <View style={s.footerDivider} />
+          <View style={s.choiceDivider} />
 
-          <View style={[s.footerSide, s.footerSideRight]}>
-            <Text style={s.footerOptionA} numberOfLines={1}>{poll.option_a}</Text>
-            <View style={[s.footerBadge, { backgroundColor: "#2563EB" }]}>
-              <Text style={s.footerBadgeText}>A</Text>
+          <View style={[s.choicePanelA]}>
+            <Text style={s.choicePanelArrow}>→</Text>
+            <View style={[s.choicePanelBadge, { backgroundColor: "#2563EB" }]}>
+              <Text style={s.choicePanelBadgeText}>A</Text>
             </View>
-            <Text style={s.footerArrowA}>→</Text>
+            <Text style={s.choicePanelText}>{poll.option_a}</Text>
           </View>
         </View>
 
@@ -865,55 +865,67 @@ const s = StyleSheet.create({
     maxWidth: 160,
     textAlign: "right",
   },
-  cardBody: {
+  cardTop: {
     flex: 1,
     justifyContent: "center",
-    padding: 28,
-    paddingTop: 40,
-    paddingBottom: 20,
+    padding: 24,
+    paddingTop: 36,
+    paddingBottom: 16,
   },
   cardQuestion: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "900",
     color: "#0F0F11",
-    lineHeight: 36,
+    lineHeight: 34,
     letterSpacing: -0.5,
   },
   cardDeadline: {
-    marginTop: 14,
-    fontSize: 13,
+    marginTop: 10,
+    fontSize: 12,
     fontWeight: "600",
     color: "#9CA3AF",
   },
-  cardFooter: {
+  choicePanels: {
     flexDirection: "row",
-    alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    backgroundColor: "#FAFAFA",
+    minHeight: 110,
   },
-  footerSide: {
+  choicePanelB: {
     flex: 1,
-    flexDirection: "row",
+    backgroundColor: "#FEF2F2",
     alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
     gap: 6,
+    borderBottomLeftRadius: 24,
   },
-  footerSideRight: { justifyContent: "flex-end" },
-  footerArrowB: { fontSize: 16, fontWeight: "800", color: "#DC2626" },
-  footerArrowA: { fontSize: 16, fontWeight: "800", color: "#2563EB" },
-  footerBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  choicePanelA: {
+    flex: 1,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    gap: 6,
+    borderBottomRightRadius: 24,
+  },
+  choiceDivider: { width: 1, backgroundColor: "#F3F4F6" },
+  choicePanelArrow: { fontSize: 18, fontWeight: "900", color: "#9CA3AF" },
+  choicePanelBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
-  footerBadgeText: { fontSize: 12, fontWeight: "900", color: "#fff" },
-  footerOptionB: { flex: 1, fontSize: 12, fontWeight: "700", color: "#DC2626" },
-  footerOptionA: { flex: 1, fontSize: 12, fontWeight: "700", color: "#2563EB", textAlign: "right" },
-  footerDivider: { width: 1, height: 24, backgroundColor: "#E5E7EB", marginHorizontal: 8 },
+  choicePanelBadgeText: { fontSize: 15, fontWeight: "900", color: "#fff" },
+  choicePanelText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F0F11",
+    textAlign: "center",
+    lineHeight: 22,
+  },
   closedOverlay: {
     position: "absolute",
     bottom: 0,
