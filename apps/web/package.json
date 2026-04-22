@@ -7,7 +7,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:web": "node scripts/generate-icons.mjs && expo export --platform web && node scripts/patch-pwa.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
