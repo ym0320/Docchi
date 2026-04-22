@@ -1,4 +1,4 @@
-﻿export interface Env {
+export interface Env {
   DB: D1Database;
   COOKIE_NAME: string;
   TURNSTILE_SECRET: string;
@@ -28,6 +28,9 @@ export default {
 
       const resultMatch = url.pathname.match(/^\/api\/v1\/polls\/([^/]+)\/result$/);
       if (request.method === "GET" && resultMatch) return withCors(await getPollResult(env, resultMatch[1]));
+
+      const closeMatch = url.pathname.match(/^\/api\/v1\/polls\/([^/]+)\/close$/);
+      if (request.method === "POST" && closeMatch) return withCors(await closePoll(request, env, closeMatch[1]));
 
       return withCors(json({ error: "Not found" }, 404));
     } catch (e) {
@@ -75,12 +78,17 @@ async function createPoll(request: Request, env: Env): Promise<Response> {
     return json({ error: "close_in_minutes must be between 1 and 4320" }, 400);
   }
 
+  const sessionId = getSessionId(request, env.COOKIE_NAME);
+  const creatorHash = sessionId ? await hashSession(sessionId, env) : null;
+
   const now = new Date();
   const closesAt = new Date(now.getTime() + closeInMinutes * 60000);
   const pollId = `p_${crypto.randomUUID()}`;
 
-  await env.DB.prepare(`INSERT INTO polls (id, title, option_a, option_b, created_at, closes_at, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open')`)
-    .bind(pollId, title, optionA, optionB, now.toISOString(), closesAt.toISOString()).run();
+  await env.DB.prepare(
+    `INSERT INTO polls (id, title, option_a, option_b, created_at, closes_at, status, creator_session_hash)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'open', ?7)`
+  ).bind(pollId, title, optionA, optionB, now.toISOString(), closesAt.toISOString(), creatorHash).run();
 
   return json({ poll_id: pollId, created_at: now.toISOString(), closes_at: closesAt.toISOString() }, 201);
 }
@@ -127,9 +135,32 @@ async function getPollResult(env: Env, pollId: string): Promise<Response> {
   return json({ poll_id: pollId, result, closed: new Date(poll.closes_at).getTime() <= Date.now() });
 }
 
+async function closePoll(request: Request, env: Env, pollId: string): Promise<Response> {
+  const sessionId = getSessionId(request, env.COOKIE_NAME);
+  if (!sessionId) return json({ error: "session is required" }, 401);
+
+  const poll = await env.DB.prepare(`SELECT creator_session_hash, closes_at FROM polls WHERE id = ?1`)
+    .bind(pollId).first<{ creator_session_hash: string | null; closes_at: string }>();
+  if (!poll) return json({ error: "poll not found" }, 404);
+  if (new Date(poll.closes_at).getTime() <= Date.now()) return json({ error: "already closed" }, 410);
+
+  const requesterHash = await hashSession(sessionId, env);
+  if (!poll.creator_session_hash || poll.creator_session_hash !== requesterHash) {
+    return json({ error: "forbidden" }, 403);
+  }
+
+  const now = new Date().toISOString();
+  await env.DB.prepare(`UPDATE polls SET closes_at = ?1 WHERE id = ?2`).bind(now, pollId).run();
+
+  return json({ poll_id: pollId, closed_at: now });
+}
+
 async function aggregateResult(env: Env, pollId: string) {
-  const row = await env.DB.prepare(`SELECT SUM(CASE WHEN selected_option='A' THEN 1 ELSE 0 END) as votes_a, SUM(CASE WHEN selected_option='B' THEN 1 ELSE 0 END) as votes_b, COUNT(*) as total_votes FROM votes WHERE poll_id=?1`)
-    .bind(pollId).first<{ votes_a: number | null; votes_b: number | null; total_votes: number }>();
+  const row = await env.DB.prepare(
+    `SELECT SUM(CASE WHEN selected_option='A' THEN 1 ELSE 0 END) as votes_a,
+            SUM(CASE WHEN selected_option='B' THEN 1 ELSE 0 END) as votes_b,
+            COUNT(*) as total_votes FROM votes WHERE poll_id=?1`
+  ).bind(pollId).first<{ votes_a: number | null; votes_b: number | null; total_votes: number }>();
 
   const votesA = row?.votes_a ?? 0, votesB = row?.votes_b ?? 0, total = row?.total_votes ?? 0;
   return {

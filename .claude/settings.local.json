@@ -4,7 +4,13 @@
       "Bash(python -c \"import sys,json; [print\\(b['name']\\) for b in json.load\\(sys.stdin\\)]\")",
       "Bash(python -c \"import sys,json; [print\\(r['ref']\\) for r in json.load\\(sys.stdin\\)]\")",
       "Bash(python -c \"import sys,json; [print\\(r['name'], '-', r['updated_at'][:10], '\\(', r['visibility'], '\\)'\\) for r in json.load\\(sys.stdin\\)]\")",
-      "Bash(python -c \"import sys,json; commits=json.load\\(sys.stdin\\); [print\\(c['sha'][:7], c['commit']['message'][:60], '-', c['commit']['author']['date'][:10]\\) for c in commits]\")"
+      "Bash(python -c \"import sys,json; commits=json.load\\(sys.stdin\\); [print\\(c['sha'][:7], c['commit']['message'][:60], '-', c['commit']['author']['date'][:10]\\) for c in commits]\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 \"https://docchi-api.yuunakanaka-miruku.workers.dev/api/v1/health\")",
+      "Bash(node -e ' *)",
+      "Bash(taskkill /F /IM node.exe)",
+      "PowerShell(Stop-Process -Force)",
+      "Bash(git commit *)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Host \"done\")"
     ]
   }
 }

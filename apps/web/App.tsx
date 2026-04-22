@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -12,7 +13,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { createApi } from "./src/api";
+import { createApi, myPollIds, myPolls } from "./src/api";
+import type { MyPoll } from "./src/api";
 import type { Poll, PollResult } from "./src/types";
 
 const api = createApi("");
@@ -52,15 +54,21 @@ function VoteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<PollResult | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const barA = useRef(new Animated.Value(0)).current;
   const barB = useRef(new Animated.Value(0)).current;
+  const progBarA = useRef(new Animated.Value(0)).current;
+  const progBarB = useRef(new Animated.Value(0)).current;
 
   const showResult = (res: PollResult, pick: "A" | "B" | null, isClosed = false) => {
     setResult(res);
     setChosen(pick);
     setClosed(isClosed);
+    setProgress(null);
     Animated.parallel([
       Animated.spring(barA, { toValue: res.percent_a / 100, useNativeDriver: false, tension: 60 }),
       Animated.spring(barB, { toValue: res.percent_b / 100, useNativeDriver: false, tension: 60 }),
@@ -74,8 +82,11 @@ function VoteScreen() {
       setResult(null);
       setChosen(null);
       setClosed(false);
+      setProgress(null);
       barA.setValue(0);
       barB.setValue(0);
+      progBarA.setValue(0);
+      progBarB.setValue(0);
       try {
         await api.initSession();
         setPoll(await api.fetchNextPoll());
@@ -110,6 +121,45 @@ function VoteScreen() {
     }
   };
 
+  const peekProgress = async () => {
+    if (!poll || loadingProgress) return;
+    if (progress) { setProgress(null); return; }
+    setLoadingProgress(true);
+    try {
+      const res = await api.fetchPollResult(poll.id);
+      setProgress(res);
+      Animated.parallel([
+        Animated.spring(progBarA, { toValue: res.percent_a / 100, useNativeDriver: false, tension: 80 }),
+        Animated.spring(progBarB, { toValue: res.percent_b / 100, useNativeDriver: false, tension: 80 }),
+      ]).start();
+    } catch {
+      setError("進捗の取得に失敗しました");
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!poll) return;
+    Alert.alert("今すぐ締め切る", "この質問の受付を終了しますか？この操作は取り消せません。", [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "締め切る", style: "destructive",
+        onPress: async () => {
+          setClosing(true);
+          try {
+            await api.closePoll(poll.id);
+            loadNext();
+          } catch {
+            setError("締め切りに失敗しました");
+          } finally {
+            setClosing(false);
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={s.centered}>
@@ -132,19 +182,30 @@ function VoteScreen() {
   }
 
   const isPollClosed = new Date(poll.closes_at).getTime() <= Date.now();
+  const isMyPoll = myPollIds.has(poll.id);
 
   return (
     <Animated.ScrollView
       style={[s.voteScroll, { opacity: fadeAnim }]}
       contentContainerStyle={s.voteContent}
-      scrollEnabled={false}
     >
       {/* ヘッダー */}
       <View style={s.voteHeader}>
         <Text style={s.appName}>Docchi</Text>
-        {(isPollClosed || closed) && (
-          <View style={s.closedBadge}><Text style={s.closedBadgeText}>締切済み</Text></View>
-        )}
+        <View style={s.headerRight}>
+          {(isPollClosed || closed) && (
+            <View style={s.closedBadge}><Text style={s.closedBadgeText}>締切済み</Text></View>
+          )}
+          {isMyPoll && !result && !isPollClosed && (
+            <Pressable
+              style={[s.closeNowBtn, closing && { opacity: 0.5 }]}
+              onPress={handleClose}
+              disabled={closing}
+            >
+              <Text style={s.closeNowBtnText}>{closing ? "処理中..." : "今すぐ締め切る"}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {error && (
@@ -187,6 +248,24 @@ function VoteScreen() {
           />
           {isPollClosed && (
             <Text style={s.closedNote}>この質問は締め切りを過ぎています</Text>
+          )}
+
+          {/* 進捗プレビュー */}
+          {!isPollClosed && (
+            <Pressable style={s.peekBtn} onPress={peekProgress} disabled={loadingProgress}>
+              <Text style={s.peekBtnText}>
+                {loadingProgress ? "取得中..." : progress ? "進捗を隠す" : "現在の進捗を見る"}
+              </Text>
+            </Pressable>
+          )}
+
+          {progress && (
+            <View style={s.progressPreview}>
+              <Text style={s.progressLabel}>現在の投票状況（投票前）</Text>
+              <MiniBar label="A" percent={progress.percent_a} anim={progBarA} color="#2563EB" />
+              <MiniBar label="B" percent={progress.percent_b} anim={progBarB} color="#DC2626" />
+              <Text style={s.progressTotal}>合計 {progress.total_votes} 票</Text>
+            </View>
           )}
         </View>
       ) : (
@@ -283,6 +362,19 @@ function ResultBar({
   );
 }
 
+function MiniBar({ label, percent, anim, color }: { label: string; percent: number; anim: Animated.Value; color: string }) {
+  const barWidth = anim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  return (
+    <View style={s.miniBarRow}>
+      <Text style={[s.miniBarLabel, { color }]}>{label}</Text>
+      <View style={s.miniBarTrack}>
+        <Animated.View style={[s.miniBarFill, { width: barWidth, backgroundColor: color }]} />
+      </View>
+      <Text style={s.miniBarPercent}>{percent}%</Text>
+    </View>
+  );
+}
+
 // ─── Create ─────────────────────────────────────────────
 
 const DEADLINE_PRESETS = [
@@ -302,6 +394,7 @@ function CreateScreen() {
   const [useCustom, setUseCustom] = useState(false);
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [myPollList, setMyPollList] = useState<MyPoll[]>([]);
 
   const effectiveMinutes = useCustom ? Number(customInput) : minutes;
 
@@ -321,6 +414,7 @@ function CreateScreen() {
       await api.createPoll({ title: t, option_a: a, option_b: b, close_in_minutes: mins, turnstile_token: "" });
       setTitle(""); setOptionA(""); setOptionB("");
       setMinutes(60); setCustomInput(""); setUseCustom(false);
+      setMyPollList(Array.from(myPolls.values()).reverse());
       setStatus({ msg: "投稿しました！みんなが投票してくれるよ", ok: true });
     } catch (e) {
       setStatus({ msg: e instanceof Error ? e.message : "投稿に失敗しました", ok: false });
@@ -421,8 +515,102 @@ function CreateScreen() {
         >
           <Text style={s.submitBtnText}>{submitting ? "投稿中..." : "投稿する"}</Text>
         </Pressable>
+
+        {/* 自分の投稿一覧 */}
+        {myPollList.length > 0 && (
+          <View style={s.myPollsSection}>
+            <Text style={s.myPollsSectionTitle}>自分の投稿</Text>
+            {myPollList.map(p => (
+              <MyPollCard
+                key={p.id}
+                poll={p}
+                onClose={() => {
+                  setMyPollList(prev => prev.map(x => x.id === p.id ? { ...x, closes_at: new Date().toISOString() } : x));
+                }}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function MyPollCard({ poll, onClose }: { poll: MyPoll; onClose: () => void }) {
+  const [result, setResult] = useState<PollResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const barA = useRef(new Animated.Value(0)).current;
+  const barB = useRef(new Animated.Value(0)).current;
+  const isClosed = new Date(poll.closes_at).getTime() <= Date.now();
+
+  const fetchResult = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await api.fetchPollResult(poll.id);
+      setResult(res);
+      Animated.parallel([
+        Animated.spring(barA, { toValue: res.percent_a / 100, useNativeDriver: false }),
+        Animated.spring(barB, { toValue: res.percent_b / 100, useNativeDriver: false }),
+      ]).start();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchResult(); }, []);
+
+  const handleClose = () => {
+    Alert.alert("今すぐ締め切る", `「${poll.title}」を締め切りますか？`, [
+      { text: "キャンセル", style: "cancel" },
+      {
+        text: "締め切る", style: "destructive",
+        onPress: async () => {
+          setClosing(true);
+          try { await api.closePoll(poll.id); onClose(); } catch { /* already closed */ }
+          finally { setClosing(false); }
+        },
+      },
+    ]);
+  };
+
+  return (
+    <View style={s.myPollCard}>
+      <View style={s.myPollHeader}>
+        <Text style={s.myPollTitle} numberOfLines={2}>{poll.title}</Text>
+        {isClosed
+          ? <View style={s.closedBadge}><Text style={s.closedBadgeText}>締切済み</Text></View>
+          : <Pressable style={[s.closeNowBtn, closing && { opacity: 0.5 }]} onPress={handleClose} disabled={closing}>
+              <Text style={s.closeNowBtnText}>{closing ? "処理中..." : "締め切る"}</Text>
+            </Pressable>
+        }
+      </View>
+      {!isClosed && <Text style={s.myPollDeadline}>締切 {formatDeadline(poll.closes_at)}</Text>}
+      {loading && <Text style={s.myPollLoading}>集計中...</Text>}
+      {result && (
+        <View style={s.myPollResult}>
+          <View style={s.myPollResultRow}>
+            <Text style={[s.myPollOptionLabel, { color: "#2563EB" }]}>A</Text>
+            <Text style={s.myPollOptionText} numberOfLines={1}>{poll.option_a}</Text>
+            <Text style={[s.myPollPercent, { color: "#2563EB" }]}>{result.percent_a}%</Text>
+            <Text style={s.myPollVotes}>{result.votes_a}票</Text>
+          </View>
+          <MiniBar label="" percent={result.percent_a} anim={barA} color="#2563EB" />
+          <View style={[s.myPollResultRow, { marginTop: 8 }]}>
+            <Text style={[s.myPollOptionLabel, { color: "#DC2626" }]}>B</Text>
+            <Text style={s.myPollOptionText} numberOfLines={1}>{poll.option_b}</Text>
+            <Text style={[s.myPollPercent, { color: "#DC2626" }]}>{result.percent_b}%</Text>
+            <Text style={s.myPollVotes}>{result.votes_b}票</Text>
+          </View>
+          <MiniBar label="" percent={result.percent_b} anim={barB} color="#DC2626" />
+          <Text style={s.myPollTotal}>合計 {result.total_votes} 票</Text>
+        </View>
+      )}
+      <Pressable style={s.refreshBtn} onPress={fetchResult} disabled={loading}>
+        <Text style={s.refreshBtnText}>{loading ? "更新中..." : "票数を更新"}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -473,8 +661,11 @@ const s = StyleSheet.create({
   voteContent: { padding: 16, gap: 12, paddingBottom: 32 },
   voteHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
   appName: { fontSize: 22, fontWeight: "900", color: "#1C1C1E", letterSpacing: -0.5 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   closedBadge: { backgroundColor: "#F3F4F6", borderRadius: 12, paddingVertical: 4, paddingHorizontal: 10 },
   closedBadgeText: { fontSize: 12, fontWeight: "600", color: "#6B7280" },
+  closeNowBtn: { backgroundColor: "#FEF2F2", borderRadius: 12, paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1, borderColor: "#FECACA" },
+  closeNowBtnText: { fontSize: 12, fontWeight: "700", color: "#DC2626" },
 
   errorBox: { backgroundColor: "#FEF2F2", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#FECACA" },
   errorBoxText: { fontSize: 13, color: "#991B1B" },
@@ -535,6 +726,17 @@ const s = StyleSheet.create({
   skipLink: { alignSelf: "center", padding: 12 },
   skipLinkText: { fontSize: 14, color: "#AEAEB2" },
 
+  peekBtn: { alignSelf: "center", marginTop: 8, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, borderWidth: 1, borderColor: "#E5E5EA" },
+  peekBtnText: { fontSize: 13, fontWeight: "600", color: "#3C3C43" },
+  progressPreview: { backgroundColor: "#F9F9F9", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#E5E5EA", gap: 8, marginTop: 4 },
+  progressLabel: { fontSize: 11, fontWeight: "700", color: "#8E8E93", letterSpacing: 0.5 },
+  progressTotal: { fontSize: 12, color: "#8E8E93", textAlign: "right" },
+  miniBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  miniBarLabel: { fontSize: 13, fontWeight: "800", width: 16 },
+  miniBarTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: "#E5E5EA", overflow: "hidden" },
+  miniBarFill: { height: 6, borderRadius: 3 },
+  miniBarPercent: { fontSize: 12, fontWeight: "700", color: "#3C3C43", width: 36, textAlign: "right" },
+
   // Create screen
   createScroll: { flex: 1, backgroundColor: "#fff" },
   createContent: { padding: 20, gap: 4, paddingBottom: 48 },
@@ -579,4 +781,24 @@ const s = StyleSheet.create({
     alignItems: "center", marginTop: 12,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+  myPollsSection: { marginTop: 28, gap: 12 },
+  myPollsSectionTitle: { fontSize: 16, fontWeight: "800", color: "#1C1C1E" },
+  myPollCard: {
+    backgroundColor: "#F9F9F9", borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: "#E5E5EA", gap: 8,
+  },
+  myPollHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  myPollTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: "#1C1C1E" },
+  myPollDeadline: { fontSize: 11, color: "#8E8E93" },
+  myPollLoading: { fontSize: 12, color: "#AEAEB2" },
+  myPollResult: { gap: 4, marginTop: 4 },
+  myPollResultRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  myPollOptionLabel: { fontSize: 13, fontWeight: "800", width: 16 },
+  myPollOptionText: { flex: 1, fontSize: 13, color: "#3C3C43" },
+  myPollPercent: { fontSize: 14, fontWeight: "800" },
+  myPollVotes: { fontSize: 11, color: "#8E8E93", width: 30, textAlign: "right" },
+  myPollTotal: { fontSize: 12, color: "#8E8E93", textAlign: "right", marginTop: 4 },
+  refreshBtn: { alignSelf: "flex-end", paddingVertical: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E5E5EA" },
+  refreshBtnText: { fontSize: 12, fontWeight: "600", color: "#3C3C43" },
 });
