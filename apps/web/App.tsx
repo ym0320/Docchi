@@ -30,7 +30,7 @@ const MAX_CUSTOM_MINUTES = 4320;
 const SUPPORT_EMAIL = "support@docchi.app";
 const PRIVACY_URL = "https://example.com/docchi/privacy";
 const TERMS_URL = "https://example.com/docchi/terms";
-const SUBSCRIPTION_READY = false;
+const APP_VERSION = "1.0.0";
 const MONO = {
   black: "#050505",
   ink: "#111111",
@@ -55,59 +55,11 @@ const MONO = {
   dangerBg: "rgba(255,255,255,0.08)",
   dangerLine: "rgba(255,255,255,0.2)",
 };
-type RootScreen = "vote" | "create" | "settings" | "ads" | "premium";
+type RootScreen = "vote" | "create" | "settings";
 type TabKind = "vote" | "create" | "settings";
 
-const COMMUNITY_SAFETY_POINTS = [
-  "不適切な投稿はアプリ内から通報でき、一定数の通報で配信対象から自動的に外れます。",
-  "暴力・差別・性的搾取・嫌がらせにあたる内容は投稿できない前提で案内しています。",
-  "広告にも通報導線を用意し、誤解を招く表現や不快な内容を送信できます。",
-];
-
-const AD_SHOWCASE = [
-  {
-    id: "ad-coffee-pass",
-    label: "広告",
-    title: "近所のカフェの朝パス",
-    body: "朝の一杯が毎日10%オフ。生活導線に合う小さなスポンサード枠の例です。",
-    cta: "詳細を見る",
-  },
-  {
-    id: "ad-weekend-trip",
-    label: "広告",
-    title: "週末の日帰り温泉プラン",
-    body: "投稿テーマと相性のいい文脈広告を明示ラベル付きで表示する想定です。",
-    cta: "プランを見る",
-  },
-  {
-    id: "ad-study-app",
-    label: "広告",
-    title: "5分学習の語学アプリ",
-    body: "個人特定のトラッキングではなく、画面文脈に沿った掲載を想定しています。",
-    cta: "アプリを見る",
-  },
-];
-
-const SUBSCRIPTION_PLANS = [
-  {
-    id: "plus-monthly",
-    title: "Docchi Plus 月額",
-    price: "¥300 / 月",
-    badge: "おすすめ",
-    note: "広告の非表示、投稿の優先表示、テーマの先行解放",
-  },
-  {
-    id: "plus-yearly",
-    title: "Docchi Plus 年額",
-    price: "¥2,900 / 年",
-    badge: "2か月分お得",
-    note: "月額よりお得に Plus 機能をまとめて使える想定です。",
-  },
-];
-
 function activeTabForScreen(screen: RootScreen): TabKind {
-  if (screen === "vote" || screen === "create") return screen;
-  return "settings";
+  return screen;
 }
 
 async function openExternal(url: string) {
@@ -129,9 +81,7 @@ export default function App() {
       <View style={s.body}>
         {screen === "vote" && <VoteScreen />}
         {screen === "create" && <CreateScreen />}
-        {screen === "settings" && <SettingsScreen onOpenAds={() => setScreen("ads")} onOpenPremium={() => setScreen("premium")} />}
-        {screen === "ads" && <AdsScreen onBack={() => setScreen("settings")} />}
-        {screen === "premium" && <PremiumScreen onBack={() => setScreen("settings")} />}
+        {screen === "settings" && <SettingsScreen />}
       </View>
       <View style={s.tabBar}>
         <Pressable style={s.tabItem} onPress={() => setScreen("vote")}>
@@ -1276,9 +1226,7 @@ function CreateScreen() {
       <ScrollView style={s.createScroll} contentContainerStyle={s.createContent} keyboardShouldPersistTaps="handled">
         <View style={s.createHeader}>
           <Text style={s.createTitle}>自分で決めきれないことを委ねよう</Text>
-          <Pressable style={s.sampleResetBtn} onPress={() => setSamplePolls(createSamplePolls())}>
-            <Text style={s.sampleResetBtnText}>リセット</Text>
-          </Pressable>
+          <View />
         </View>
 
         <Text style={s.fieldLabel}>質問 <Text style={s.charCount}>{title.length}/60</Text></Text>
@@ -1390,54 +1338,6 @@ function CreateScreen() {
         <Pressable style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={submit} disabled={submitting}>
           <Text style={s.submitBtnText}>{submitting ? "投稿中..." : "投稿する"}</Text>
         </Pressable>
-
-        <View style={s.sampleSection}>
-          <View style={s.sampleSectionHeader}>
-            <Text style={s.myPollsSectionTitle}>委ね方のサンプル</Text>
-            <Text style={s.sampleSectionHint}>日常の決断をどう委ねるかの例です。不要なら消しても、右上のリセットで戻せます</Text>
-          </View>
-          <TextInput
-            style={s.inlineSearchInput}
-            placeholder="サンプルを検索"
-            placeholderTextColor={MONO.textFaint}
-            value={sampleQuery}
-            onChangeText={setSampleQuery}
-          />
-          {samplePolls.length === 0 ? (
-            <View style={s.sampleEmptyCard}>
-              <Text style={s.sampleEmptyTitle}>サンプル投稿はすべて非表示です</Text>
-              <Text style={s.sampleEmptyBody}>投稿タブ右上の「リセット」で、もう一度表示できます。</Text>
-            </View>
-          ) : filteredSamplePolls.length === 0 ? (
-            <View style={s.sampleEmptyCard}>
-              <Text style={s.sampleEmptyTitle}>一致するサンプルがありません</Text>
-              <Text style={s.sampleEmptyBody}>言い回しを変えるか、検索をクリアするとまた一覧できます。</Text>
-            </View>
-          ) : (
-            filteredSamplePolls.map((poll) => (
-              <View key={poll.id} style={s.sampleCard}>
-                <View style={s.sampleCardHeader}>
-                  <Text style={s.sampleCardTitle} numberOfLines={2}>{poll.title}</Text>
-                </View>
-                <Text style={s.sampleOptionA}>A: {poll.option_a}</Text>
-                <Text style={s.sampleOptionB}>B: {poll.option_b}</Text>
-                {poll.option_c ? <Text style={s.sampleOptionC}>C: {poll.option_c}</Text> : null}
-                <Text style={s.sampleNote}>{poll.note}</Text>
-                <View style={s.cardActionRow}>
-                  <Pressable style={s.sampleUseBtn} onPress={() => applyPollToComposer(poll)}>
-                    <Text style={s.sampleUseBtnText}>この内容で作る</Text>
-                  </Pressable>
-                  <Pressable
-                    style={s.sampleDeleteBtn}
-                    onPress={() => setSamplePolls((prev) => prev.filter((item) => item.id !== poll.id))}
-                  >
-                    <Text style={s.sampleDeleteBtnText}>削除</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
 
         {myPollList.length > 0 && (
           <View style={s.myPollsSection}>
@@ -1616,183 +1516,37 @@ function ScreenHeader({
   );
 }
 
-function SettingsScreen({
-  onOpenAds,
-  onOpenPremium,
-}: {
-  onOpenAds: () => void;
-  onOpenPremium: () => void;
-}) {
+function SettingsScreen() {
   return (
     <ScrollView style={s.settingsRoot} contentContainerStyle={s.settingsContent}>
-      <ScreenHeader title="設定" subtitle="安全性、広告、課金、法務導線をここから確認できます。" />
+      <ScreenHeader title="設定" />
 
       <View style={s.settingsSection}>
-        <Text style={s.settingsSectionTitle}>コミュニティ安全設計</Text>
-        {COMMUNITY_SAFETY_POINTS.map((point) => (
-          <View key={point} style={s.policyRow}>
-            <View style={s.policyDot} />
-            <Text style={s.policyText}>{point}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={s.settingsSection}>
-        <Text style={s.settingsSectionTitle}>広告と課金</Text>
-        <Pressable style={s.settingsLinkCard} onPress={onOpenAds}>
-          <View>
-            <Text style={s.settingsLinkTitle}>広告センター</Text>
-            <Text style={s.settingsLinkBody}>広告表示例、広告通報、表示ポリシーを見る</Text>
-          </View>
-          <Text style={s.settingsChevron}>›</Text>
-        </Pressable>
-        <Pressable style={s.settingsLinkCard} onPress={onOpenPremium}>
-          <View>
-            <Text style={s.settingsLinkTitle}>Docchi Plus</Text>
-            <Text style={s.settingsLinkBody}>料金、特典、復元、サブスク管理導線を見る</Text>
-          </View>
-          <Text style={s.settingsChevron}>›</Text>
-        </Pressable>
-      </View>
-
-      <View style={s.settingsSection}>
-        <Text style={s.settingsSectionTitle}>法務とサポート</Text>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(PRIVACY_URL)}>
-          <Text style={s.settingsActionText}>プライバシーポリシーを開く</Text>
-        </Pressable>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(TERMS_URL)}>
-          <Text style={s.settingsActionText}>利用規約を開く</Text>
-        </Pressable>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(`mailto:${SUPPORT_EMAIL}`)}>
-          <Text style={s.settingsActionText}>サポートに連絡する</Text>
-        </Pressable>
-      </View>
-
-      <View style={s.reviewNoteCard}>
-        <Text style={s.reviewNoteTitle}>審査向けの実装ポイント</Text>
-        <Text style={s.reviewNoteBody}>
-          投稿通報、広告通報、法務リンク、サポート導線、課金の復元・管理導線をアプリ内からたどれるようにしています。
-        </Text>
-      </View>
-    </ScrollView>
-  );
-}
-
-function AdsScreen({ onBack }: { onBack: () => void }) {
-  const [status, setStatus] = useState<string | null>(null);
-
-  const handleReportAd = async (placementId: string) => {
-    try {
-      await api.initSession();
-      await api.reportAd({ placement_id: placementId, reason: "misleading" });
-      setStatus("広告を通報しました。審査と運用の確認用に内容を保存しました。");
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : "広告の通報に失敗しました");
-    }
-  };
-
-  return (
-    <ScrollView style={s.settingsRoot} contentContainerStyle={s.settingsContent}>
-      <ScreenHeader
-        title="広告センター"
-        subtitle="広告であることを明示し、その場で報告できる導線を用意しています。"
-        onBack={onBack}
-      />
-
-      <View style={s.reviewNoteCard}>
-        <Text style={s.reviewNoteTitle}>広告ポリシー</Text>
-        <Text style={s.reviewNoteBody}>
-          追跡ベースではなく文脈ベースを前提にした広告例です。各枠に広告ラベルを付け、不快・誤認・不適切広告を個別に通報できます。
-        </Text>
-      </View>
-
-      {status ? (
-        <View style={[s.statusBox, s.statusBoxOk]}>
-          <Text style={[s.statusText, s.statusTextOk]}>{status}</Text>
-        </View>
-      ) : null}
-
-      {AD_SHOWCASE.map((ad) => (
-        <View key={ad.id} style={s.adCard}>
-          <View style={s.adHeader}>
-            <Text style={s.adBadge}>{ad.label}</Text>
-            <Pressable style={s.adReportBtn} onPress={() => handleReportAd(ad.id)}>
-              <Text style={s.adReportBtnText}>広告を報告</Text>
-            </Pressable>
-          </View>
-          <Text style={s.adTitle}>{ad.title}</Text>
-          <Text style={s.adBody}>{ad.body}</Text>
-          <Pressable style={s.adCtaBtn} onPress={() => Alert.alert("広告詳細", "審査用の広告画面サンプルです。配信時に実広告の遷移先を設定してください。")}>
-            <Text style={s.adCtaText}>{ad.cta}</Text>
-          </Pressable>
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-function PremiumScreen({ onBack }: { onBack: () => void }) {
-  const [status, setStatus] = useState<string | null>(null);
-
-  const handlePurchase = (planId: string) => {
-    if (!SUBSCRIPTION_READY) {
-      setStatus(`購入画面は実装済みですが、${planId} の App Store Connect 商品ID接続がまだ必要です。`);
-      return;
-    }
-    setStatus("購入フローを開始します。");
-  };
-
-  return (
-    <ScrollView style={s.settingsRoot} contentContainerStyle={s.settingsContent}>
-      <ScreenHeader
-        title="Docchi Plus"
-        subtitle="価格、特典、復元、サブスクリプション管理、法務導線を一画面にまとめています。"
-        onBack={onBack}
-      />
-
-      <View style={s.reviewNoteCard}>
-        <Text style={s.reviewNoteTitle}>Plus特典</Text>
-        <Text style={s.reviewNoteBody}>
-          デジタル特典のため App Store 課金前提で設計しています。広告の非表示、テーマ先行解放、今後の限定機能を想定した課金画面です。
-        </Text>
-      </View>
-
-      {SUBSCRIPTION_PLANS.map((plan) => (
-        <View key={plan.id} style={s.planCard}>
-          <View style={s.planHeader}>
-            <View>
-              <Text style={s.planTitle}>{plan.title}</Text>
-              <Text style={s.planPrice}>{plan.price}</Text>
-            </View>
-            <Text style={s.planBadge}>{plan.badge}</Text>
-          </View>
-          <Text style={s.planNote}>{plan.note}</Text>
-          <Pressable style={[s.submitBtn, !SUBSCRIPTION_READY && s.disabledBtn]} onPress={() => handlePurchase(plan.id)}>
-            <Text style={s.submitBtnText}>{SUBSCRIPTION_READY ? "購入を続ける" : "商品接続待ち"}</Text>
-          </Pressable>
-        </View>
-      ))}
-
-      {status ? (
-        <View style={[s.statusBox, s.statusBoxOk]}>
-          <Text style={[s.statusText, s.statusTextOk]}>{status}</Text>
-        </View>
-      ) : null}
-
-      <View style={s.settingsSection}>
-        <Text style={s.settingsSectionTitle}>購入サポート</Text>
-        <Pressable style={s.settingsActionBtn} onPress={() => setStatus("復元導線は配置済みです。StoreKit 接続後に購入復元処理を紐付けてください。")}>
-          <Text style={s.settingsActionText}>購入を復元</Text>
-        </Pressable>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal("https://apps.apple.com/account/subscriptions")}>
-          <Text style={s.settingsActionText}>サブスクリプションを管理</Text>
-        </Pressable>
+        <Text style={s.settingsSectionTitle}>法務</Text>
         <Pressable style={s.settingsActionBtn} onPress={() => openExternal(PRIVACY_URL)}>
           <Text style={s.settingsActionText}>プライバシーポリシー</Text>
         </Pressable>
         <Pressable style={s.settingsActionBtn} onPress={() => openExternal(TERMS_URL)}>
           <Text style={s.settingsActionText}>利用規約</Text>
         </Pressable>
+      </View>
+
+      <View style={s.settingsSection}>
+        <Text style={s.settingsSectionTitle}>サポート</Text>
+        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(`mailto:${SUPPORT_EMAIL}`)}>
+          <Text style={s.settingsActionText}>フィードバックを送る</Text>
+        </Pressable>
+        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(`mailto:${SUPPORT_EMAIL}`)}>
+          <Text style={s.settingsActionText}>お問い合わせ</Text>
+        </Pressable>
+      </View>
+
+      <View style={s.settingsSection}>
+        <Text style={s.settingsSectionTitle}>このアプリについて</Text>
+        <View style={s.settingsInfoRow}>
+          <Text style={s.settingsInfoLabel}>バージョン</Text>
+          <Text style={s.settingsInfoValue}>{APP_VERSION}</Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -2425,7 +2179,7 @@ const s = StyleSheet.create({
   sampleEmptyBody: { fontSize: 12, color: MONO.textMuted, lineHeight: 18 },
   disabledBtn: { opacity: 0.55 },
 
-  // Settings / Ads / Premium
+  // Settings
   settingsRoot: { flex: 1, backgroundColor: MONO.white },
   settingsContent: { padding: 20, gap: 16, paddingBottom: 44 },
   settingsHeader: { gap: 8, marginBottom: 4 },
@@ -2454,30 +2208,7 @@ const s = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  settingsSectionTitle: { fontSize: 16, fontWeight: "800", color: MONO.ink },
-  policyRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  policyDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: MONO.ink,
-    marginTop: 7,
-  },
-  policyText: { flex: 1, fontSize: 13, color: MONO.textSoft, lineHeight: 20 },
-  settingsLinkCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: MONO.line,
-    backgroundColor: MONO.white,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  settingsLinkTitle: { fontSize: 15, fontWeight: "800", color: MONO.text },
-  settingsLinkBody: { marginTop: 3, fontSize: 12, color: MONO.textMuted, lineHeight: 18, maxWidth: SW - 120 },
-  settingsChevron: { fontSize: 24, color: MONO.textFaint, lineHeight: 24 },
+  settingsSectionTitle: { fontSize: 16, fontWeight: "800", color: MONO.ink, marginBottom: 2 },
   settingsActionBtn: {
     borderRadius: 14,
     borderWidth: 1,
@@ -2487,86 +2218,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
   },
   settingsActionText: { fontSize: 14, fontWeight: "700", color: MONO.text },
-  reviewNoteCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: MONO.line,
-    backgroundColor: "#fcfcfc",
-    padding: 16,
-    gap: 6,
-  },
-  reviewNoteTitle: { fontSize: 14, fontWeight: "800", color: MONO.ink },
-  reviewNoteBody: { fontSize: 13, color: MONO.textSoft, lineHeight: 20 },
-  adCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: MONO.line,
-    backgroundColor: "#fff8ef",
-    padding: 16,
-    gap: 10,
-  },
-  adHeader: {
+  settingsInfoRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  adBadge: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: "#92400e",
-    backgroundColor: "#fde68a",
-    borderRadius: 999,
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    overflow: "hidden",
   },
-  adReportBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: MONO.line,
-    backgroundColor: MONO.white,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  adReportBtnText: { fontSize: 12, fontWeight: "700", color: MONO.text },
-  adTitle: { fontSize: 18, fontWeight: "800", color: MONO.ink },
-  adBody: { fontSize: 13, color: MONO.textSoft, lineHeight: 20 },
-  adCtaBtn: {
-    alignSelf: "flex-start",
-    borderRadius: 14,
-    backgroundColor: MONO.ink,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  adCtaText: { fontSize: 13, fontWeight: "800", color: MONO.white },
-  planCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: MONO.line,
-    backgroundColor: MONO.surface,
-    padding: 16,
-    gap: 10,
-  },
-  planHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  planTitle: { fontSize: 18, fontWeight: "800", color: MONO.ink },
-  planPrice: { marginTop: 4, fontSize: 14, fontWeight: "700", color: MONO.textSoft },
-  planBadge: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: MONO.white,
-    backgroundColor: MONO.choiceB,
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    overflow: "hidden",
-  },
-  planNote: { fontSize: 13, color: MONO.textSoft, lineHeight: 20 },
+  settingsInfoLabel: { fontSize: 14, color: MONO.textSoft },
+  settingsInfoValue: { fontSize: 14, fontWeight: "700", color: MONO.textMuted },
   // History screen
   historyRoot: { flex: 1, backgroundColor: MONO.darkBg },
   historyHeader: {
