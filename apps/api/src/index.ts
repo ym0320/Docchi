@@ -123,25 +123,24 @@ async function createPoll(request: Request, env: Env): Promise<Response> {
 async function getNextPoll(request: Request, env: Env): Promise<Response> {
   const sessionId = getSessionId(request, env.COOKIE_NAME);
   const now = new Date().toISOString();
-  const visibleClause = `(
-    SELECT COUNT(*) FROM poll_reports pr WHERE pr.poll_id = p.id
-  ) < ${MAX_VISIBLE_REPORTS}`;
-  // 締切が近い順を優先しつつ少しランダム性を加える（同じ投票が続かないように）
+  // 締切が近い上位10件からランダムに1件選ぶ（締切優先＋連続回避）
   const query = sessionId
-    ? `SELECT p.id, p.title, p.option_a, p.option_b, p.option_c, p.closes_at
-       FROM polls p
-       WHERE p.closes_at > ?1
-         AND ${visibleClause}
-         AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.poll_id=p.id AND v.session_hash=?2)
-         AND (p.creator_session_hash IS NULL OR p.creator_session_hash != ?2)
-       ORDER BY (julianday(p.closes_at) - julianday('now')) + ABS(RANDOM() % 100) * 0.01
-       LIMIT 1`
-    : `SELECT id, title, option_a, option_b, option_c, closes_at
-       FROM polls p
-       WHERE closes_at > ?1
-         AND ${visibleClause}
-       ORDER BY (julianday(closes_at) - julianday('now')) + ABS(RANDOM() % 100) * 0.01
-       LIMIT 1`;
+    ? `SELECT id, title, option_a, option_b, option_c, closes_at FROM (
+         SELECT p.id, p.title, p.option_a, p.option_b, p.option_c, p.closes_at
+         FROM polls p
+         WHERE p.closes_at > ?1
+           AND (SELECT COUNT(*) FROM poll_reports pr WHERE pr.poll_id = p.id) < ${MAX_VISIBLE_REPORTS}
+           AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.poll_id=p.id AND v.session_hash=?2)
+           AND (p.creator_session_hash IS NULL OR p.creator_session_hash != ?2)
+         ORDER BY p.closes_at ASC LIMIT 10
+       ) ORDER BY RANDOM() LIMIT 1`
+    : `SELECT id, title, option_a, option_b, option_c, closes_at FROM (
+         SELECT p.id, p.title, p.option_a, p.option_b, p.option_c, p.closes_at
+         FROM polls p
+         WHERE p.closes_at > ?1
+           AND (SELECT COUNT(*) FROM poll_reports pr WHERE pr.poll_id = p.id) < ${MAX_VISIBLE_REPORTS}
+         ORDER BY p.closes_at ASC LIMIT 10
+       ) ORDER BY RANDOM() LIMIT 1`;
 
   const stmt = env.DB.prepare(query);
   const result = sessionId ? await stmt.bind(now, await hashSession(sessionId, env)).first() : await stmt.bind(now).first();

@@ -28,8 +28,6 @@ const { width: SW, height: SH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SW * 0.27;
 const MAX_CUSTOM_MINUTES = 4320;
 const SUPPORT_EMAIL = "support@docchi.app";
-const PRIVACY_URL = "https://example.com/docchi/privacy";
-const TERMS_URL = "https://example.com/docchi/terms";
 const APP_VERSION = "1.0.0";
 const MONO = {
   black: "#050505",
@@ -845,112 +843,9 @@ function HistoryCard({
 
 // ─── Create Screen ───────────────────────────────────────
 
-const DEADLINE_PRESETS = [
-  { label: "30分", value: 30 },
-  { label: "1時間", value: 60 },
-  { label: "半日", value: 720 },
-  { label: "1日", value: 1440 },
-  { label: "3日", value: 4320 },
-];
+type DeadlineMode = "short" | "long";
+const SHORT_QUICK_MINUTES = [5, 10, 15, 30, 45, 60];
 
-type SamplePoll = {
-  id: string;
-  title: string;
-  option_a: string;
-  option_b: string;
-  option_c?: string;
-  note: string;
-};
-
-function createSamplePolls(): SamplePoll[] {
-  return [
-    {
-      id: "sample-outfit-office",
-      title: "今日の出社、ジャケット着ていく？それともシャツだけにする？",
-      option_a: "ジャケットを着ていく",
-      option_b: "シャツだけで行く",
-      note: "その日の自分の動きを決めきれないときに、他人の一票を背中押しにする使い方です。",
-    },
-    {
-      id: "sample-lunch-alone",
-      title: "今日のお昼、ひとりで外に食べに行く？それとも社内で済ませる？",
-      option_a: "外に食べに行く",
-      option_b: "社内で済ませる",
-      note: "小さな行動でも自分では決めきれない、という優柔不断さにそのまま寄せたサンプルです。",
-    },
-    {
-      id: "sample-message-crush",
-      title: "気になってる人に、今日こそ連絡する？まだ送らない？",
-      option_a: "今夜送る",
-      option_b: "今日はやめておく",
-      note: "自分の感情が絡む選択ほど、他人に委ねる意味が出ます。",
-    },
-    {
-      id: "sample-laundry-night",
-      title: "洗濯物、今夜のうちに回す？明日の朝に回す？",
-      option_a: "今夜やる",
-      option_b: "明日の朝やる",
-      note: "生活の中の先延ばし判断を、ひとりで抱え込まず決めるためのサンプルです。",
-    },
-    {
-      id: "sample-buy-shoes",
-      title: "迷ってるスニーカー、今日買う？いったん見送る？",
-      option_a: "今日買う",
-      option_b: "今回は見送る",
-      note: "買うかやめるかの最終判断を委ねると、衝動買いの言い訳にも歯止めにもなります。",
-    },
-    {
-      id: "sample-gym",
-      title: "仕事終わり、ジムに行く？今日はまっすぐ帰る？",
-      option_a: "ジムに行く",
-      option_b: "今日は帰って休む",
-      note: "意志の弱さを自覚している日の選択ほど、このアプリのコンセプトに合います。",
-    },
-    {
-      id: "sample-haircut",
-      title: "美容室、予約するなら今日入れる？それとも来週まで伸ばす？",
-      option_a: "今日予約する",
-      option_b: "来週まで待つ",
-      note: "後回しにしがちな用事を、投票結果で実行に移しやすくするイメージです。",
-    },
-    {
-      id: "sample-weekend-plan",
-      title: "この土日、実家に帰る？ひとりで家で休む？",
-      option_a: "実家に帰る",
-      option_b: "家でゆっくり休む",
-      option_c: "予定を入れて外に出る",
-      note: "気分も体力も絡む週末の決断を、第三者に委ねるための3択です。",
-    },
-    {
-      id: "sample-overtime",
-      title: "このタスク、今日残って終わらせる？明日の朝に回す？",
-      option_a: "今日やり切る",
-      option_b: "明日の朝やる",
-      note: "仕事の判断を自分だけで決めるとぶれやすい人向けの、実用的な委任サンプルです。",
-    },
-    {
-      id: "sample-trip-booking",
-      title: "来月の旅行、もう予約する？もう少し様子を見る？",
-      option_a: "今予約する",
-      option_b: "まだ様子を見る",
-      note: "先送りしがちな中くらいの決断を、他人の多数決で前に進める例です。",
-    },
-    {
-      id: "sample-resign",
-      title: "今の会社、今年中に転職活動を始める？まだ今の場所で続ける？",
-      option_a: "転職活動を始める",
-      option_b: "もう少し今の会社で続ける",
-      note: "人生寄りの選択でも、『自分では決めきれないから委ねる』構図ならこのアプリらしく使えます。",
-    },
-    {
-      id: "sample-move-invite",
-      title: "友だちに誘われた飲み会、今日は行く？断って休む？",
-      option_a: "行く",
-      option_b: "断って休む",
-      note: "人付き合いの小さな判断も、誰かに決めてもらえると気持ちが軽くなります。",
-    },
-  ];
-}
 
 function roundToNextFiveMinutes(date: Date): Date {
   const next = new Date(date);
@@ -1031,7 +926,6 @@ function WebDeadlinePicker({
 
   return (
     <View style={s.webPickerWrap}>
-      <Text style={s.customPickerHint}>カレンダーで締切日時を選択</Text>
       <input
         type="datetime-local"
         value={formatDateTimeLocal(value)}
@@ -1083,11 +977,9 @@ function NativeDeadlinePicker({
 
   return (
     <View style={s.nativePickerWrap}>
-      <Text style={s.customPickerHint}>ネイティブの日時ピッカーで締切を選択</Text>
       {Platform.OS === "ios" ? (
         <View style={s.iosPickerWrap}>
           <View style={s.iosPickerCard}>
-            <Text style={s.nativePickerLabel}>日付</Text>
             <DateTimePicker
               value={value}
               mode="date"
@@ -1098,7 +990,6 @@ function NativeDeadlinePicker({
             />
           </View>
           <View style={s.iosPickerCard}>
-            <Text style={s.nativePickerLabel}>時刻</Text>
             <DateTimePicker
               value={value}
               mode="time"
@@ -1111,11 +1002,9 @@ function NativeDeadlinePicker({
       ) : (
         <View style={s.nativePickerActions}>
           <Pressable style={s.nativePickerButton} onPress={() => setShowAndroidDate(true)}>
-            <Text style={s.nativePickerLabel}>日付</Text>
             <Text style={s.nativePickerValue}>{formatPickerDate(value)}</Text>
           </Pressable>
           <Pressable style={s.nativePickerButton} onPress={() => setShowAndroidTime(true)}>
-            <Text style={s.nativePickerLabel}>時刻</Text>
             <Text style={s.nativePickerValue}>{formatPickerTime(value)}</Text>
           </Pressable>
           {showAndroidDate && (
@@ -1148,22 +1037,17 @@ function CreateScreen() {
   const [optionB, setOptionB] = useState("");
   const [optionC, setOptionC] = useState("");
   const [useOptionC, setUseOptionC] = useState(false);
-  const [minutes, setMinutes] = useState(60);
-  const [customInput, setCustomInput] = useState("");
-  const [customDateTime, setCustomDateTime] = useState<Date>(() => createDefaultCustomDeadline());
-  const [useCustom, setUseCustom] = useState(false);
+  const [deadlineMode, setDeadlineMode] = useState<DeadlineMode>("short");
+  const [shortMinutes, setShortMinutes] = useState(15);
+  const [longDateTime, setLongDateTime] = useState<Date>(() => createDefaultCustomDeadline());
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [myPollList, setMyPollList] = useState<MyPoll[]>([]);
-  const [samplePolls, setSamplePolls] = useState<SamplePoll[]>(() => createSamplePolls());
-  const [sampleQuery, setSampleQuery] = useState("");
   const [historyQuery, setHistoryQuery] = useState("");
 
-  const effectiveMinutes = useCustom
-    ? Platform.OS === "web" || Platform.OS === "ios"
-      ? diffMinutesFromNow(customDateTime)
-      : Number(customInput)
-    : minutes;
+  const effectiveMinutes = deadlineMode === "short"
+    ? shortMinutes
+    : diffMinutesFromNow(longDateTime);
 
   const submit = async () => {
     const t = title.trim(), a = optionA.trim(), b = optionB.trim(), c = optionC.trim();
@@ -1179,7 +1063,7 @@ function CreateScreen() {
       await api.initSession();
       await api.createPoll({ title: t, option_a: a, option_b: b, option_c: useOptionC ? c : undefined, close_in_minutes: mins, turnstile_token: "" });
       setTitle(""); setOptionA(""); setOptionB(""); setOptionC(""); setUseOptionC(false);
-       setMinutes(60); setCustomInput(""); setUseCustom(false); setCustomDateTime(createDefaultCustomDeadline());
+      setDeadlineMode("short"); setShortMinutes(15); setLongDateTime(createDefaultCustomDeadline());
       setMyPollList(Array.from(myPolls.values()).reverse());
       setStatus({ msg: "投稿しました！みんなが投票してくれるよ", ok: true });
     } catch (e) {
@@ -1202,15 +1086,6 @@ function CreateScreen() {
     setUseOptionC(Boolean(poll.option_c));
     setStatus({ msg: "内容を入力欄に読み込みました。必要なら少し直して投稿できます。", ok: true });
   };
-
-  const filteredSamplePolls = samplePolls.filter((poll) => {
-    const q = sampleQuery.trim().toLowerCase();
-    if (!q) return true;
-    return [poll.title, poll.option_a, poll.option_b, poll.option_c ?? "", poll.note]
-      .join(" ")
-      .toLowerCase()
-      .includes(q);
-  });
 
   const filteredMyPolls = myPollList.filter((poll) => {
     const q = historyQuery.trim().toLowerCase();
@@ -1290,43 +1165,55 @@ function CreateScreen() {
         )}
 
         <Text style={s.fieldLabel}>締切</Text>
-        <View style={s.presetRow}>
-          {DEADLINE_PRESETS.map((p) => (
-            <Pressable
-              key={p.value}
-              style={[s.presetChip, !useCustom && minutes === p.value && s.presetChipActive]}
-              onPress={() => { setMinutes(p.value); setUseCustom(false); }}
-            >
-              <Text style={[s.presetChipText, !useCustom && minutes === p.value && s.presetChipTextActive]}>
-                {p.label}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={s.deadlineModeRow}>
           <Pressable
-            style={[s.presetChip, useCustom && s.presetChipActive]}
-            onPress={() => {
-              setUseCustom(true);
-              setCustomDateTime(createDefaultCustomDeadline());
-            }}
+            style={[s.deadlineModeChip, deadlineMode === "short" && s.deadlineModeChipActive]}
+            onPress={() => setDeadlineMode("short")}
           >
-            <Text style={[s.presetChipText, useCustom && s.presetChipTextActive]}>カスタム</Text>
+            <Text style={[s.deadlineModeChipText, deadlineMode === "short" && s.deadlineModeChipTextActive]}>分指定</Text>
+          </Pressable>
+          <Pressable
+            style={[s.deadlineModeChip, deadlineMode === "long" && s.deadlineModeChipActive]}
+            onPress={() => setDeadlineMode("long")}
+          >
+            <Text style={[s.deadlineModeChipText, deadlineMode === "long" && s.deadlineModeChipTextActive]}>日付指定</Text>
           </Pressable>
         </View>
-        {useCustom && Platform.OS === "web" && (
-          <WebDeadlinePicker value={customDateTime} onChange={setCustomDateTime} />
+
+        {deadlineMode === "short" && (
+          <View style={s.shortDeadlineWrap}>
+            <View style={s.shortQuickRow}>
+              {SHORT_QUICK_MINUTES.map((m) => (
+                <Pressable
+                  key={m}
+                  style={[s.shortQuickChip, shortMinutes === m && s.shortQuickChipActive]}
+                  onPress={() => setShortMinutes(m)}
+                >
+                  <Text style={[s.shortQuickChipText, shortMinutes === m && s.shortQuickChipTextActive]}>
+                    {m}分
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={s.stepperRow}>
+              <Pressable style={s.stepperBtn} onPress={() => setShortMinutes((m) => Math.max(1, m - 1))}>
+                <Text style={s.stepperBtnText}>−</Text>
+              </Pressable>
+              <View style={s.stepperDisplay}>
+                <Text style={s.stepperValue}>{shortMinutes}</Text>
+                <Text style={s.stepperUnit}>分</Text>
+              </View>
+              <Pressable style={s.stepperBtn} onPress={() => setShortMinutes((m) => Math.min(60, m + 1))}>
+                <Text style={s.stepperBtnText}>+</Text>
+              </Pressable>
+            </View>
+          </View>
         )}
-        {useCustom && (Platform.OS === "ios" || Platform.OS === "android") && (
-          <NativeDeadlinePicker value={customDateTime} onChange={setCustomDateTime} />
-        )}
-        {useCustom && Platform.OS !== "web" && Platform.OS !== "ios" && Platform.OS !== "android" && (
-          <TextInput
-            style={s.customMinInput}
-            placeholder="分単位で入力（1〜4320）"
-            placeholderTextColor={MONO.textFaint}
-            keyboardType="numeric"
-            value={customInput}
-            onChangeText={setCustomInput}
-          />
+
+        {deadlineMode === "long" && (
+          Platform.OS === "web"
+            ? <WebDeadlinePicker value={longDateTime} onChange={setLongDateTime} />
+            : <NativeDeadlinePicker value={longDateTime} onChange={setLongDateTime} />
         )}
 
         {status && (
@@ -1516,17 +1403,105 @@ function ScreenHeader({
   );
 }
 
+const PRIVACY_SECTIONS = [
+  {
+    heading: "収集する情報",
+    body: "Docchi は、匿名のセッションIDをブラウザのCookieに保存します。氏名・メールアドレス・電話番号などの個人を特定できる情報は一切収集しません。",
+  },
+  {
+    heading: "情報の利用目的",
+    body: "セッションIDは、二重投票の防止および自分が作成した投稿の管理にのみ使用します。第三者へのデータ販売や広告ターゲティングへの転用は行いません。",
+  },
+  {
+    heading: "データの保管期間",
+    body: "セッションおよび投票データは作成から30日後に自動削除されます。",
+  },
+  {
+    heading: "Cookieについて",
+    body: "Docchi が使用するCookieはサービスの動作に必要なセッションCookieのみです。トラッキングCookieや第三者Cookieは使用しません。",
+  },
+  {
+    heading: "広告について",
+    body: "将来的に広告を導入する場合は、個人追跡ではなく表示コンテキストに基づいた広告を採用します。その際はこのポリシーを更新してお知らせします。",
+  },
+  {
+    heading: "お問い合わせ",
+    body: `プライバシーに関するご質問は ${SUPPORT_EMAIL} までお送りください。`,
+  },
+];
+
+const TERMS_SECTIONS = [
+  {
+    heading: "サービス概要",
+    body: "Docchi（以下「本サービス」）は、日常の二択を匿名で投票に委ねるアプリです。ユーザー登録不要で、誰でも無料でご利用いただけます。",
+  },
+  {
+    heading: "利用条件",
+    body: "本サービスは13歳以上の方を対象としています。本規約に同意のうえご利用ください。",
+  },
+  {
+    heading: "禁止事項",
+    body: "以下の内容を含む投稿を禁止します：暴力・差別・性的搾取・嫌がらせ・個人を特定する情報・スパム・虚偽の情報。違反投稿は通報機能により非表示となります。",
+  },
+  {
+    heading: "投稿コンテンツ",
+    body: "投稿した内容はアプリ内で公開されます。投稿者の個人情報は紐付けられません。一定数の通報を受けた投稿は自動的に配信から除外されます。",
+  },
+  {
+    heading: "免責事項",
+    body: "本サービスは現状有姿で提供されます。投票結果の正確性・有用性について保証しません。本サービスの利用により生じた損害について、運営者は責任を負いません。",
+  },
+  {
+    heading: "サービスの変更・終了",
+    body: "運営者は予告なく本サービスの内容を変更または終了することがあります。",
+  },
+  {
+    heading: "お問い合わせ",
+    body: `ご不明な点は ${SUPPORT_EMAIL} までご連絡ください。`,
+  },
+];
+
+type SettingsSubScreen = "main" | "privacy" | "terms";
+
+function PolicyScreen({ title, sections, onBack }: {
+  title: string;
+  sections: { heading: string; body: string }[];
+  onBack: () => void;
+}) {
+  return (
+    <ScrollView style={s.settingsRoot} contentContainerStyle={s.settingsContent}>
+      <ScreenHeader title={title} onBack={onBack} />
+      {sections.map((sec) => (
+        <View key={sec.heading} style={s.policySection}>
+          <Text style={s.policySectionHeading}>{sec.heading}</Text>
+          <Text style={s.policySectionBody}>{sec.body}</Text>
+        </View>
+      ))}
+      <Text style={s.policyLastUpdated}>最終更新: 2026年4月</Text>
+    </ScrollView>
+  );
+}
+
 function SettingsScreen() {
+  const [sub, setSub] = useState<SettingsSubScreen>("main");
+
+  if (sub === "privacy") {
+    return <PolicyScreen title="プライバシーポリシー" sections={PRIVACY_SECTIONS} onBack={() => setSub("main")} />;
+  }
+  if (sub === "terms") {
+    return <PolicyScreen title="利用規約" sections={TERMS_SECTIONS} onBack={() => setSub("main")} />;
+  }
+
   return (
     <ScrollView style={s.settingsRoot} contentContainerStyle={s.settingsContent}>
       <ScreenHeader title="設定" />
 
       <View style={s.settingsSection}>
         <Text style={s.settingsSectionTitle}>法務</Text>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(PRIVACY_URL)}>
+        <Pressable style={s.settingsActionBtn} onPress={() => setSub("privacy")}>
           <Text style={s.settingsActionText}>プライバシーポリシー</Text>
         </Pressable>
-        <Pressable style={s.settingsActionBtn} onPress={() => openExternal(TERMS_URL)}>
+        <Pressable style={s.settingsActionBtn} onPress={() => setSub("terms")}>
           <Text style={s.settingsActionText}>利用規約</Text>
         </Pressable>
       </View>
@@ -2047,27 +2022,54 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: MONO.text,
   },
-  presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  presetChip: {
+  // Deadline picker
+  deadlineModeRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  deadlineModeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: MONO.line,
+    backgroundColor: MONO.white,
+    alignItems: "center",
+  },
+  deadlineModeChipActive: { borderColor: MONO.ink, backgroundColor: MONO.ink },
+  deadlineModeChipText: { fontSize: 14, fontWeight: "700", color: MONO.textSoft },
+  deadlineModeChipTextActive: { color: MONO.white },
+  shortDeadlineWrap: { gap: 12, marginBottom: 12 },
+  shortQuickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  shortQuickChip: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: MONO.line,
     backgroundColor: MONO.white,
   },
-  presetChipActive: { borderColor: MONO.ink, backgroundColor: MONO.ink },
-  presetChipText: { fontSize: 13, fontWeight: "600", color: MONO.textSoft },
-  presetChipTextActive: { color: MONO.white },
-  customMinInput: {
+  shortQuickChipActive: { borderColor: MONO.ink, backgroundColor: MONO.ink },
+  shortQuickChipText: { fontSize: 13, fontWeight: "600", color: MONO.textSoft },
+  shortQuickChipTextActive: { color: MONO.white },
+  stepperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingVertical: 4,
+  },
+  stepperBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1.5,
     borderColor: MONO.line,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 15,
-    color: MONO.text,
-    marginBottom: 12,
+    backgroundColor: MONO.white,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  stepperBtnText: { fontSize: 22, fontWeight: "700", color: MONO.ink, lineHeight: 26 },
+  stepperDisplay: { flexDirection: "row", alignItems: "baseline", gap: 4, minWidth: 80, justifyContent: "center" },
+  stepperValue: { fontSize: 32, fontWeight: "900", color: MONO.ink },
+  stepperUnit: { fontSize: 16, fontWeight: "700", color: MONO.textSoft },
   webPickerWrap: { marginBottom: 12, gap: 8 },
   nativePickerWrap: { marginBottom: 12, gap: 10 },
   iosPickerWrap: {
@@ -2358,4 +2360,17 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   secondaryActionBtnText: { fontSize: 12, fontWeight: "700", color: MONO.text },
+
+  // Policy screens (privacy / terms)
+  policySection: {
+    backgroundColor: MONO.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MONO.line,
+    padding: 16,
+    gap: 6,
+  },
+  policySectionHeading: { fontSize: 15, fontWeight: "800", color: MONO.ink },
+  policySectionBody: { fontSize: 13, color: MONO.textSoft, lineHeight: 22 },
+  policyLastUpdated: { fontSize: 12, color: MONO.textFaint, textAlign: "center", marginTop: 4 },
 });
